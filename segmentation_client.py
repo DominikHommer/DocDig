@@ -5,7 +5,7 @@ import cv2 as cv
 import math
 
 class SegmentationClient:
-  def __init__(self, path = "/content/drive/MyDrive/Scans") -> None:
+  def __init__(self, path = '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans') -> None:
      self.MAIN_DIRECTORY = path
 
   def rotateImg(self, img, verticalL):
@@ -110,7 +110,7 @@ class SegmentationClient:
     return final
 
 
-  def getVerticalLines(blur, xThres = 40, minFoundLines = 3, minLineLength = 50):
+  def getVerticalLines(self, blur, xThres = 40, minFoundLines = 3, minLineLength = 50):
     ##
     # Tries to find vertical lines of blurred image based on threshold, minFoundLines, minLineLength
     ##

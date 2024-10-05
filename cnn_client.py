@@ -36,3 +36,6 @@ class CNNClient:
         predicted_class_index = np.argmax(predictions, axis=1)[0]
         predicted_class_name = index_to_class[predicted_class_index]
         return predicted_class_name
+    
+    
+    ## TODO: modular für Text und Zahlenerkennung
