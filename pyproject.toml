@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "DocDig"
+version = "0.1.0"
+description = ""
+authors = ["Benedikt Veith <bv@scherer-software.de>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pathlib = "^1.0.1"
+pdf2image = "^1.17.0"
+tensorflow = "^2.17.0"
+ipython = "^8.28.0"
+opencv-python = "^4.10.0.84"
+numpy = "2.0"
+python-dotenv = "^1.0.1"
+pandas = "^2.2.3"
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

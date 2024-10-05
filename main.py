@@ -7,11 +7,11 @@ import cv2 as cv
 import json
 import tensorflow as tf
 from tensorflow.keras.models import load_model
+from dotenv import load_dotenv 
+import os
 
-
-
-def load_and_segment_pdf(pdf_path, column_numbers):
-    sgc = SegmentationClient()
+def load_and_segment_pdf(pdf_path, column_numbers, main_dir):
+    sgc = SegmentationClient(main_dir)
 
     # Schritt 1: PDF laden und in Zellen segmentieren
     table = []
@@ -157,7 +157,7 @@ def save_results(csvSpecies, csvNr, species_output, numbers_output):
     pd.DataFrame(csvNr, columns=["Seite", "Zeile", "Zahl"]).to_csv(numbers_output, index=False)
 
 def main():
-    main_dir = '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans'
+    main_dir = os.getenv('MAIN_DIR', '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans')
     test_file = main_dir + "/1972/scan_1972_CdB_2_20231125160645.pdf"
     #MAIN_DIRECTORY = "/content/drive/MyDrive/Scans"
     #TEST_FILE = MAIN_DIRECTORY + "/1972/scan_1972_CdB_2_20231125160645.pdf"
@@ -168,21 +168,20 @@ def main():
     #species_output = '/content/drive/MyDrive/Scans/predictions.csv'
     #numbers_output = '/content/drive/MyDrive/Scans/predictions_numbers.csv'
     
-    species_model_path = '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/Models/vogelarten_best_model.keras'
-    number_model_path = '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/Models/mnist_cnn_model.keras'
-    
-
+    species_model_path = os.getenv('SPECIES_KERAS_DIR', '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/Models/vogelarten_best_model.keras')
+    number_model_path = os.getenv('MNIST_KERAS_DIR', '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/Models/mnist_cnn_model.keras')
 
     pdf_path = test_file
     bird_cnn = load_model(species_model_path)
     number_cnn = load_model(number_model_path)
-    species_output = '/Users/MeinNotebook/Desktop/predictions.csv'
-    numbers_output = '/Users/MeinNotebook/Desktop/predicitons_numbers.csv'
+    species_output = os.getenv('SPECIES_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predictions.csv')
+    numbers_output = os.getenv('NUMBERS_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predicitons_numbers.csv')
     
-    table = load_and_segment_pdf(pdf_path, [1, 6])
+    table = load_and_segment_pdf(pdf_path, [1, 6], main_dir)
     print(table)
     csvSpecies, csvNr = process_images(table, bird_cnn, number_cnn)
     save_results(csvSpecies, csvNr, species_output, numbers_output)
 
 if __name__ == "__main__":
+    load_dotenv()
     main()
