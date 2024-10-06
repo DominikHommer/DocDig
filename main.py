@@ -168,8 +168,8 @@ def main():
     #species_output = '/content/drive/MyDrive/Scans/predictions.csv'
     #numbers_output = '/content/drive/MyDrive/Scans/predictions_numbers.csv'
     
-    species_model_path = os.getenv('SPECIES_KERAS_DIR', '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/Models/vogelarten_best_model.keras')
-    number_model_path = os.getenv('MNIST_KERAS_DIR', '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/Models/mnist_cnn_model.keras')
+    species_model_path = os.getenv('SPECIES_KERAS_DIR', 'vogelarten_best_model.keras')
+    number_model_path = os.getenv('MNIST_KERAS_DIR', 'mnist_cnn_model.keras')
 
     pdf_path = test_file
 
@@ -179,7 +179,6 @@ def main():
     numbers_output = os.getenv('NUMBERS_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predicitons_numbers.csv')
     
     table = load_and_segment_pdf(pdf_path, [1, 6], main_dir)
-    print(table)
     csvSpecies, csvNr = process_images(table, bird_cnn, number_cnn)
     save_results(csvSpecies, csvNr, species_output, numbers_output)
 
