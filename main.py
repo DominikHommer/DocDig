@@ -172,6 +172,7 @@ def main():
     number_model_path = os.getenv('MNIST_KERAS_DIR', '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/Models/mnist_cnn_model.keras')
 
     pdf_path = test_file
+
     bird_cnn = load_model(species_model_path)
     number_cnn = load_model(number_model_path)
     species_output = os.getenv('SPECIES_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predictions.csv')
