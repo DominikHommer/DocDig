@@ -7,6 +7,7 @@ import cv2 as cv
 import json
 import tensorflow as tf
 from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing import image
 from dotenv import load_dotenv 
 import os
 
@@ -33,12 +34,12 @@ def process_images(table, bird_cnn, number_cnn):
                     csvNr.append([pNr, rNr, number_result])
     return csvSpecies, csvNr
 
-def prepare_species_image_for_cnn(image):
-    data = cv.bitwise_not(image)
+def prepare_species_image_for_cnn(row_image):
+    data = cv.bitwise_not(row_image)
 
     # TODO: Resize image canvas to correct aspect ratio and center content
 
-    cv.imwrite("tmp.png", image)
+    cv.imwrite("tmp.png", row_image)
 
     species_img = image.load_img("tmp.png", target_size=(22, 150))
     species_img_array = image.img_to_array(species_img)
@@ -52,9 +53,9 @@ def get_word_of_species_index(predicted_species, globalSpeciesJsonPath ='/Users/
     species_index_to_class = {v: k for k, v in class_indices.items()}
     return species_index_to_class[predicted_species]
 
-def classify_species(image, bird_cnn):
+def classify_species(row_image, bird_cnn):
     # Texterkennung (Vogelarten) mit CNN
-    species_img = prepare_species_image_for_cnn(image)
+    species_img = prepare_species_image_for_cnn(row_image)
     species_prediction = bird_cnn.predict(species_img)
     predicted_species = np.argmax(species_prediction, axis=1)[0]
     predicted_species_in_word = get_word_of_species_index(predicted_species)
@@ -128,7 +129,7 @@ def find_contour_bounding_boxes_cut_out_digits_and_predict(data, number_cnn):
             croppedImg = canvas
             
         croppedImg = cv.resize(croppedImg, dsize=(28, 28), interpolation=cv.INTER_CUBIC)
-        cv.imshow(croppedImg)
+        cv.imshow("Cropped Image", croppedImg)
         croppedImg = np.expand_dims(croppedImg, axis=0)
 
         prediction = number_cnn.predict(croppedImg)
@@ -139,16 +140,16 @@ def find_contour_bounding_boxes_cut_out_digits_and_predict(data, number_cnn):
     print("Predicted: ", predictedNumber)
     return predictedNumber
 
-def prepare_number_image_for_cnn(image, number_cnn):
-    data = cv.bitwise_not(image)
+def prepare_number_image_for_cnn(row_image, number_cnn):
+    data = cv.bitwise_not(row_image)
     data = remove_noise_increas_increase_contrast(data)
     #rowCopy = fix_holes_between_lines_of_digits(data)
     number = find_contour_bounding_boxes_cut_out_digits_and_predict(data, number_cnn)   # unbedingt ändern haha
     return number
 
-def classify_numbers(image, number_cnn):
+def classify_numbers(row_image, number_cnn):
     # Zahlenerkennung mit CNN (MNIST)
-    predicted_number = prepare_number_image_for_cnn(image, number_cnn)
+    predicted_number = prepare_number_image_for_cnn(row_image, number_cnn)
     return predicted_number
 
 def save_results(csvSpecies, csvNr, species_output, numbers_output):
