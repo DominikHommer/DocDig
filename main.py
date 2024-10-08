@@ -1,5 +1,4 @@
 from segmentation_client import SegmentationClient
-
 import pandas as pd
 import numpy as np
 import math
@@ -13,147 +12,86 @@ import os
 
 def load_and_segment_pdf(pdf_path, column_numbers, main_dir):
     sgc = SegmentationClient(main_dir)
-
-    # Schritt 1: PDF laden und in Zellen segmentieren
-    table = []
-    for col_nr in column_numbers:
-        table.append(sgc.pdf_scan_to_cells_of_columns(pdf_path, col_nr))
-    return table
+    return [sgc.pdf_scan_to_cells_of_columns(pdf_path, col_nr) for col_nr in column_numbers]
 
 def process_images(table, bird_cnn, number_cnn):
-    # Schritt 2: Zellen für Texterkennung und Zahlenklassifikation vorbereiten
-    csvSpecies, csvNr = [], []
-    for idx, extract in enumerate(table):
-        for pNr, page in enumerate(extract):
-            for rNr, row in enumerate(page):
-                if idx == 0:  # Texterkennung (Vogelarten)
-                    species_result = classify_species(row, bird_cnn)
-                    csvSpecies.append([pNr, rNr, species_result])
-                elif idx == 1:  # Zahlenklassifizierung
-                    number_result = classify_numbers(row, number_cnn)
-                    csvNr.append([pNr, rNr, number_result])
+    csvSpecies = classify_column(table[0], bird_cnn, classify_species)
+    csvNr = classify_column(table[1], number_cnn, classify_numbers)
     return csvSpecies, csvNr
 
-def prepare_species_image_for_cnn(row_image):
-    data = cv.bitwise_not(row_image)
-
-    # TODO: Resize image canvas to correct aspect ratio and center content
-
-    cv.imwrite("tmp.png", row_image)
-
-    species_img = image.load_img("tmp.png", target_size=(22, 150))
-    species_img_array = image.img_to_array(species_img)
-    species_img_array = np.expand_dims(species_img_array, axis=0)
-    species_img_array /= 255.0
-    return species_img_array
-
-def get_word_of_species_index(predicted_species, globalSpeciesJsonPath ='/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/class_indices.json' ):
-    with open(globalSpeciesJsonPath, 'r') as file:
-        class_indices = json.load(file)
-    species_index_to_class = {v: k for k, v in class_indices.items()}
-    return species_index_to_class[predicted_species]
+def classify_column(column_data, cnn_model, classify_func):
+    results = []
+    for pNr, page in enumerate(column_data):
+        for rNr, row in enumerate(page):
+            result = classify_func(row, cnn_model)
+            results.append([pNr, rNr, result])
+    return results
 
 def classify_species(row_image, bird_cnn):
-    # Texterkennung (Vogelarten) mit CNN
-    species_img = prepare_species_image_for_cnn(row_image)
+    species_img = prepare_image_for_cnn(row_image, target_size=(22, 150))
     species_prediction = bird_cnn.predict(species_img)
-    predicted_species = np.argmax(species_prediction, axis=1)[0]
-    predicted_species_in_word = get_word_of_species_index(predicted_species)
-    return predicted_species_in_word
+    return get_species_name(species_prediction)
 
-def remove_noise_increas_increase_contrast(data):
-    componentsNumber, labeledImage, componentStats, componentCentroids = cv.connectedComponentsWithStats(data, connectivity=4)
-    minArea = 40
-    remainingComponentLabels = [i for i in range(1, componentsNumber) if componentStats[i][4] >= minArea]
-    data = np.where(np.isin(labeledImage, remainingComponentLabels) == True, 255, 0).astype('uint8')
-    return data
 
-def fix_holes_between_lines_of_digits(data):
-    maxKernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
-    data = cv.morphologyEx(data, cv.MORPH_CLOSE, maxKernel, None, None, 1, cv.BORDER_REFLECT101)
-    rowCopy = np.copy(data)
-    rowCopy = cv.cvtColor(rowCopy,cv.COLOR_GRAY2RGB)
-    return rowCopy
-
-def find_contour_bounding_boxes_cut_out_digits_and_predict(data, number_cnn):
-    contours, hierarchy = cv.findContours(data, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE)
-
-    contours_poly = [None] * len(contours)
-    boundRect = []
-
-    for i, c in enumerate(contours):
-        if hierarchy[0][i][3] == -1:
-            contours_poly[i] = cv.approxPolyDP(c, 3, True)
-            boundRect.append(cv.boundingRect(contours_poly[i]))
-    
-    boundRect.sort(key=lambda x: x[0])
-
-    ziffer = ""
-    for i in range(len(boundRect)):
-        x, y, w, h = boundRect[i]
-
-        # Try to remove detected noise bounding boxes, which are definitely no digits
-        if w > h * 2:
-            continue
-
-        if h < 10:
-            continue
-
-        if w < 10:
-            if h < 20:
-                continue
-
-        croppedImg = data[y:y + h, x:x + w]
-
-        # Make cropped image rectangular and center it
-        if w > h:
-            canvas = np.zeros((w, w))
-
-            offset = math.floor((w - h) / 2)
-            offsetEnd = offset
-            if offsetEnd * 2 < (w - h):
-                offsetEnd = offsetEnd + 1
-
-            canvas[offset:-offsetEnd, :] = croppedImg
-            croppedImg = canvas
-            
-        elif h > w:
-            canvas = np.zeros((h, h))
-
-            offset = math.floor((h - w) / 2)
-            offsetEnd = offset
-            if offsetEnd * 2 < (h - w):
-                offsetEnd = offsetEnd + 1
-
-            canvas[:, offset:-offsetEnd] = croppedImg
-            croppedImg = canvas
-            
-        croppedImg = cv.resize(croppedImg, dsize=(28, 28), interpolation=cv.INTER_CUBIC)
-        cv.imshow("Cropped Image", croppedImg)
-        croppedImg = np.expand_dims(croppedImg, axis=0)
-
-        prediction = number_cnn.predict(croppedImg)
-        predicted_digit = np.argmax(prediction)
-        ziffer = ziffer + str(predicted_digit)
-        
-    predictedNumber = ziffer
-    print("Predicted: ", predictedNumber)
-    return predictedNumber
-
-def prepare_number_image_for_cnn(row_image, number_cnn):
+def prepare_image_for_cnn(row_image, target_size):
     data = cv.bitwise_not(row_image)
-    data = remove_noise_increas_increase_contrast(data)
-    #rowCopy = fix_holes_between_lines_of_digits(data)
-    number = find_contour_bounding_boxes_cut_out_digits_and_predict(data, number_cnn)   # unbedingt ändern haha
-    return number
+    cv.imwrite("tmp.png", row_image)
+    img = image.load_img("tmp.png", target_size=target_size)
+    img_array = image.img_to_array(img)
+    return np.expand_dims(img_array / 255.0, axis=0)
+
+def get_species_name(species_prediction, species_json_path='/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/class_indices.json'):
+    species_index = np.argmax(species_prediction, axis=1)[0]
+    with open(species_json_path, 'r') as file:
+        class_indices = json.load(file)
+    species_dict = {v: k for k, v in class_indices.items()}
+    return species_dict.get(species_index, "Unknown")
 
 def classify_numbers(row_image, number_cnn):
-    # Zahlenerkennung mit CNN (MNIST)
-    predicted_number = prepare_number_image_for_cnn(row_image, number_cnn)
-    return predicted_number
+    data = preprocess_number_image(row_image)
+    return detect_and_classify_digits(data, number_cnn)
+
+def preprocess_number_image(row_image):
+    data = cv.bitwise_not(row_image)
+    data = remove_noise_and_increase_contrast(data)
+    return data
+
+def remove_noise_and_increase_contrast(data):
+    components, labeledImage, componentStats, _ = cv.connectedComponentsWithStats(data, connectivity=4)
+    minArea = 40
+    remaining_labels = [i for i in range(1, components) if componentStats[i][4] >= minArea]
+    return np.where(np.isin(labeledImage, remaining_labels), 255, 0).astype('uint8')
+
+def detect_and_classify_digits(data, number_cnn):
+    contours, _ = cv.findContours(data, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE)
+    sorted_bounding_boxes = [cv.boundingRect(c) for c in contours if cv.contourArea(c) > 10]
+    sorted_bounding_boxes.sort(key=lambda x: x[0])
+    return classify_bounding_boxes(sorted_bounding_boxes, data, number_cnn)
+
+def classify_bounding_boxes(bounding_boxes, data, number_cnn):
+    digits = ""
+    for x, y, w, h in bounding_boxes:
+        if is_valid_digit_bounding_box(w, h):
+            cropped_img = make_square_image(data[y:y + h, x:x + w], size=28)
+            digits += str(predict_digit(cropped_img, number_cnn))
+    return digits
+
+def is_valid_digit_bounding_box(w, h):
+    return (w > h * 0.5) and (w > 10 and h > 10)
+
+def make_square_image(cropped_img, size):
+    max_dim = max(cropped_img.shape)
+    square_img = np.zeros((max_dim, max_dim))
+    offset = (max_dim - cropped_img.shape[0]) // 2
+    square_img[offset:offset + cropped_img.shape[0], :cropped_img.shape[1]] = cropped_img
+    return cv.resize(square_img, (size, size))
+
+def predict_digit(cropped_img, number_cnn):
+    cropped_img = np.expand_dims(cropped_img, axis=(0, -1)) / 255.0
+    prediction = number_cnn.predict(cropped_img)
+    return np.argmax(prediction)
 
 def save_results(csvSpecies, csvNr, species_output, numbers_output):
-    # Ergebnisse speichern
     pd.DataFrame(csvSpecies, columns=["Seite", "Zeile", "Vogelart"]).to_csv(species_output, index=False)
     pd.DataFrame(csvNr, columns=["Seite", "Zeile", "Zahl"]).to_csv(numbers_output, index=False)
 
@@ -162,6 +100,7 @@ def main():
     test_file = main_dir + "/1972/scan_1972_CdB_2_20231125160645.pdf"
     #MAIN_DIRECTORY = "/content/drive/MyDrive/Scans"
     #TEST_FILE = MAIN_DIRECTORY + "/1972/scan_1972_CdB_2_20231125160645.pdf"
+    
     
     #species_model_path = '/content/drive/MyDrive/Scans/Models/vogelarten_best_model.keras'
     #number_model_path = '/content/drive/MyDrive/Scans/Models/mnist_cnn_model.keras'
