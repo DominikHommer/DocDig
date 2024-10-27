@@ -40,7 +40,7 @@ def prepare_image_for_cnn(row_image, target_size):
     img_array = image.img_to_array(img)
     return np.expand_dims(img_array / 255.0, axis=0)
 
-def get_species_name(species_prediction, species_json_path='/Users/MeinNotebook/Google Drive/Meine Ablage/Scans/class_indices.json'):
+def get_species_name(species_prediction, species_json_path='class_indices.json'):
     species_index = np.argmax(species_prediction, axis=1)[0]
     with open(species_json_path, 'r') as file:
         class_indices = json.load(file)
@@ -117,6 +117,11 @@ def main():
     number_cnn = load_model(number_model_path)
     species_output = os.getenv('SPECIES_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predictions.csv')
     numbers_output = os.getenv('NUMBERS_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predicitons_numbers.csv')
+    
+    
+    ### for local testskript only 
+    pdf_path = "scan_1972_CdB_10_20231125162253.pdf"
+    ###
     
     table = load_and_segment_pdf(pdf_path, [1, 6], main_dir)
     csvSpecies, csvNr = process_images(table, bird_cnn, number_cnn)
