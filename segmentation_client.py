@@ -24,7 +24,6 @@ class SegmentationClient:
             filteredVerticalLines.append(current_line)
 
     angles_to_horizontal = []
-
     for line in filteredVerticalLines:
         x1, y1, x2, y2 = line[0]
 
@@ -32,20 +31,33 @@ class SegmentationClient:
             slope = (y2 - y1) / (x2 - x1)
             angle_to_horizontal = np.degrees(np.arctan(slope))
             angles_to_horizontal.append(angle_to_horizontal)
-        else :
-            angles_to_horizontal.append(-90)
 
-    filtered_angles = [90 - angle if angle > 0 else angle for angle in angles_to_horizontal]
-    rotation_angle = filtered_angles[0]
+    if len(angles_to_horizontal) == 0:
+        print("Keine Winkel gefunden, daher keine Rotation.")
+        return img
 
-    if rotation_angle < 0:
-      rotation_angle = 90 + rotation_angle
+    median_angle = np.median(angles_to_horizontal)
+    
+    filtered_angles = [angle for angle in angles_to_horizontal if abs(angle - median_angle) < 0.5]
+
+    if len(filtered_angles) == 0:
+        print("Keine gültigen Winkel nach Filterung gefunden, daher keine Rotation.")
+        return img
+
+    rotation_angle = np.mean(filtered_angles)
+    
+    if rotation_angle < -45:
+        rotation_angle += 90
+    elif rotation_angle > 45:
+        rotation_angle -= 90
 
     (h, w) = img.shape[:2]
-    center = (0,0)
-    M = cv.getRotationMatrix2D(center, rotation_angle, 1.0)
+    center = (w // 2, h // 2)
 
-    return cv.warpAffine(img, M, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
+    M = cv.getRotationMatrix2D(center, rotation_angle, 1.0)
+    rotated_img = cv.warpAffine(img, M, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
+    
+    return rotated_img
 
   def cellPostProcessing(self, cell):
       ##
@@ -117,7 +129,6 @@ class SegmentationClient:
     denoised = cv.fastNlMeansDenoising(blur, None, 30)
     dst_img = cv.Canny(denoised, 10, 200)
     lines = cv.HoughLinesP(dst_img, 1, np.pi / 180, 100, minLineLength= minLineLength, maxLineGap=2)
-
     if lines is None:
       return []
 
@@ -147,7 +158,7 @@ class SegmentationClient:
                 shouldAdd = False
 
         if shouldAdd == True:
-            verticalLines.append([line[0], 0])
+            verticalLines.append([line[0], 0])        
 
     # At least minFoundLines in a x-threshold must be found, otherwise we consider the line as invalid detected
     return list(filter(lambda l: l[1] >= minFoundLines, verticalLines))
@@ -182,8 +193,6 @@ class SegmentationClient:
       return
 
     img = self.rotateImg(img, vl)
-
-    # Detect vertical lines of image to segment it into columns
     xThres = 40
     minFoundLines = 2
 
