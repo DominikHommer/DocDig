@@ -3,6 +3,7 @@ from pathlib import Path
 from pdf2image import convert_from_path
 import cv2 as cv
 import math
+import matplotlib.pyplot as plt
 
 class SegmentationClient:
   def __init__(self, path = '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans') -> None:
@@ -152,6 +153,7 @@ class SegmentationClient:
     # At least minFoundLines in a x-threshold must be found, otherwise we consider the line as invalid detected
     return list(filter(lambda l: l[1] >= minFoundLines, verticalLines))
 
+
   def imageToCells(self, imgPath, colNr):
     ##
     # Segment image to cells for column
@@ -164,6 +166,7 @@ class SegmentationClient:
 
     # Detect vertical lines of image and try to rotate it
     gray = cv.bitwise_not(img)
+
     thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
 
     iHeight, iWidth = thresh.shape[:2]
@@ -373,6 +376,235 @@ class SegmentationClient:
 
     return doneRowSplits
 
+  def imageToColorCells(self, imgPath, colNr):
+    ##
+    # Segment image to cells for column
+    ##
+    img = cv.imread(imgPath, cv.IMREAD_GRAYSCALE)  # Grayscale image for processing
+    img_color = cv.imread(imgPath, cv.IMREAD_COLOR)  # Colored image for final segmentation output
+    assert img is not None, "file could not be read, check with os.path.exists()"
+
+    xThres = 40
+    minFoundLines = 3
+
+    # Detect vertical lines of image and try to rotate it
+    gray = cv.bitwise_not(img)
+
+    thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
+
+    iHeight, iWidth = thresh.shape[:2]
+    iHeightPart = math.floor(iHeight / 8)
+    if iHeightPart % 2 == 0:
+      iHeightPart = iHeightPart + 1
+
+    blur = cv.GaussianBlur(thresh, (1, 31), 0)
+    blur = cv.GaussianBlur(blur, (3, 1), 0)
+    blur = cv.GaussianBlur(blur, (3, 21), 0)
+    blur = cv.GaussianBlur(blur, (3, 31), 0)
+    blur = cv.GaussianBlur(blur, (3, 1), 0)
+
+    vl = self.getVerticalLines(blur, xThres, minFoundLines)
+    if not vl:
+      return
+
+    img = self.rotateImg(img, vl)
+    img_color = self.rotateImg(img_color, vl)
+
+    # Detect vertical lines of image to segment it into columns
+    xThres = 40
+    minFoundLines = 2
+
+    gray = cv.bitwise_not(img)
+    thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
+
+    blur = cv.GaussianBlur(thresh, (5, iHeightPart), 0)
+    blur = cv.GaussianBlur(blur, (3, iHeightPart), 0)
+    blur = cv.GaussianBlur(blur, (1, iHeightPart), 0)
+
+    threshRGB = cv.cvtColor(blur,cv.COLOR_GRAY2RGB)
+    threshCopy = np.copy(threshRGB)
+
+    verticalLines = self.getVerticalLines(blur, xThres, minFoundLines)
+
+    # Skip image if no vertical lines found
+    if not verticalLines:
+      return
+
+    xSplits = [[0, 0]]
+
+    for i in range(len(verticalLines)):
+        vLine = verticalLines[i]
+        x1, y1, x2, y2 = vLine[0]
+
+        # This basically gets the maximum (possible) size of the column
+        start = 0
+        if (i > 0):
+            pLine = verticalLines[i - 1]
+
+            px1 = pLine[0][0]
+            px2 = pLine[0][2]
+
+            start = px1
+            if (px2 < px1):
+                start = px2
+
+        end = x1
+        if (x2 > end):
+            end = x2
+
+        xSplits.append([start, end])
+        #cv.line(threshCopy,(x1,y1),(x2,y2),(0,255,0),2)
+
+    #cv2_imshow(threshCopy)
+
+    xSplits.append([xSplits[-1][-1], iWidth])
+    xSplits = np.sort(xSplits, axis=0)
+
+    doneSplits = []
+    doneSplitsRGB = []
+    for splits in xSplits:
+        start, end = splits
+
+        if start == 0:
+            continue
+
+        if end - start <= xThres:
+            continue
+
+        doneSplits.append(thresh[:, start:end + 15])
+        doneSplitsRGB.append(img_color[:, start:end + 15])
+
+    # Skip image if not enough columns are detected
+    if len(doneSplits) < 10:
+      return
+
+    colTest = doneSplits[colNr]
+    colTestRGB = doneSplitsRGB[colNr]
+    iHeight, iWidth = colTest.shape[:2]
+
+    # Make width uneven so we can use it as kernel for blurring an image
+    if iWidth % 2 == 0:
+      iWidth = iWidth + 1
+
+    # TODO: remove the header cell of a column
+
+
+    # Segement column into cells
+    copyTest = np.copy(colTest)
+    copyRGB = np.copy(copyTest)
+    copyRGB = cv.cvtColor(copyRGB,cv.COLOR_GRAY2RGB)
+
+    copyTest = cv.bitwise_not(copyTest)
+
+    if iWidth % 2 == 0:
+      iWidth = iWidth + 1
+
+    iWidthPart = math.floor(iWidth / 4)
+    if iWidthPart % 2 == 0:
+      iWidthPart = iWidthPart + 1
+
+    colBlur = cv.GaussianBlur(colTest, (iWidth, 5), 0)
+    colBlur = cv.GaussianBlur(colTest, (iWidth, 3), 0)
+    colBlur = cv.GaussianBlur(colTest, (iWidth, 1), 0)
+
+    colDenoised = cv.fastNlMeansDenoising(colBlur, None, 30)
+    colCanny = cv.Canny(colDenoised, 10, 200)
+
+    houghThreshold = 100
+    minLineLength = 35
+
+    # Small cells should have "smaller" thresholds to detect lines
+    if iWidth < 200:
+      houghThreshold = 50
+      minLineLength = 10
+
+    lines = cv.HoughLinesP(colCanny, 1, np.pi / 180, threshold=houghThreshold, minLineLength=minLineLength, maxLineGap=2)
+
+    # Skip image if no horizontal lines found
+    if lines is None:
+      return
+
+    # We define a 30px y-Threshold, which "decides" if a line is indeed a horizontal detected line
+    yThres = 30
+    horizontalLines = []
+    for line in lines:
+        x1,y1,x2,y2 = line[0]
+
+        # Skip value, as it is not a horizontal line
+        if not ((y1 + yThres) > y2 and (y1 - yThres) < y2):
+            continue
+
+        shouldAdd = True
+        for i in range(len(horizontalLines)):
+            hLine = horizontalLines[i]
+            h_x1, h_y1, h_x2, h_y2 = hLine[0]
+
+            # Check if "line" Vector is above / under "hLine" Vector and in its y-threshold
+            # Update horizontalLines List accordingly
+            if (x1 < h_x1) and ((h_y1 + yThres) > y1 and (h_y1 - yThres) < y1):
+                horizontalLines[i] = [[x1, y1, h_x2, h_y2], hLine[1]+1]
+
+                shouldAdd = False
+            elif (x2 > h_x2) and ((h_y2 + yThres) > y2 and (h_y2 - yThres) < y2):
+                horizontalLines[i] = [[h_x1, h_y1, x2, y2], hLine[1]+1]
+
+                shouldAdd = False
+
+        if shouldAdd == True:
+            horizontalLines.append([line[0], 0])
+
+    minFoundLines = 1
+    if iWidth < 200:
+      minFoundLines = 0
+
+    ySplits = [[0, 0]]
+
+    horizontalLines = list(filter(lambda l: l[1] >= minFoundLines, horizontalLines))
+
+    for i in range(len(horizontalLines)):
+        hLine = horizontalLines[i]
+        x1, y1, x2, y2 = hLine[0]
+
+        # This basically gets the maximum (possible) height of the row
+        start = 0
+        if (i > 0):
+            pLine = horizontalLines[i - 1]
+
+            py1 = pLine[0][1]
+            py2 = pLine[0][3]
+
+            start = py1
+            if (py2 < py1):
+                start = py2
+
+        end = y1
+        if (y2 > end):
+            end = y2
+
+        ySplits.append([start, end])
+        #cv.line(copyRGB,(x1,y1),(x2,y2),(0,255,0),2)
+
+    #cv2_imshow(copyRGB)
+
+    ySplits.append([ySplits[-1][-1], iHeight])
+    ySplits = np.sort(ySplits, axis=0)
+
+    doneRowSplits = []
+    doneRowSplitsRGB = []
+    for splits in ySplits:
+        start, end = splits
+
+        if start == 0:
+            continue
+
+        if end - start <= yThres:
+            continue
+
+        doneRowSplits.append(copyTest[start:end + 15,:])
+        doneRowSplitsRGB.append(colTestRGB[start:end + 15, :])
+
+    return doneRowSplitsRGB
+
   def pdf_scan_to_cells_of_columns(self, path, columnNumber):
     ##
     # Transform pdf into cells of defined column and safe them as seperate images into a folder
@@ -383,7 +615,7 @@ class SegmentationClient:
     dPath = self.MAIN_DIRECTORY + "/gen_img/" + fileName
     Path(dPath).mkdir(parents=True, exist_ok=True)
     Path(dPath + "/cells/").mkdir(parents=True, exist_ok=True)
-    Path(dPath + "/cells/col-" + str(columnNumber)).mkdir(parents=True, exist_ok=True)
+    Path(dPath + "/cells/NOPRE-COLOR-col-" + str(columnNumber)).mkdir(parents=True, exist_ok=True)
 
     result = []
     for idx in range(len(pdf_images)):
@@ -392,14 +624,14 @@ class SegmentationClient:
 
         result.append([])
 
-        cells = self.imageToCells(imgPath, columnNumber)
+        cells = self.imageToColorCells(imgPath, columnNumber)
         if not cells:
           continue
 
         for cidx, cell in enumerate(cells):
-            cell = self.cellPostProcessing(cell)
+            #cell = self.cellPostProcessing(cell)
 
             result[idx].append(cell)
-            #cv.imwrite(dPath + "/cells/col-" + str(columnNumber) + "/" + str(idx) + '-' + str(cidx) + '.png', cell)
+            cv.imwrite(dPath + "/cells/NOPRE-COLOR-col-" + str(columnNumber) + "/" + str(idx) + '-' + str(cidx) + '.png', cell)
 
     return result
