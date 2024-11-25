@@ -3,6 +3,7 @@ from pathlib import Path
 from pdf2image import convert_from_path
 import cv2 as cv
 import math
+import matplotlib.pyplot as plt
 
 class SegmentationClient:
   def __init__(self, path = '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans') -> None:
@@ -52,7 +53,7 @@ class SegmentationClient:
         rotation_angle -= 90
 
     (h, w) = img.shape[:2]
-    center = (w // 2, h // 2)
+    center = self.calculate_center_of_table(img)
 
     M = cv.getRotationMatrix2D(center, rotation_angle, 1.0)
     rotated_img = cv.warpAffine(img, M, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
@@ -412,3 +413,42 @@ class SegmentationClient:
             #cv.imwrite(dPath + "/cells/col-" + str(columnNumber) + "/" + str(idx) + '-' + str(cidx) + '.png', cell)
 
     return result
+  
+  def calculate_center_of_table(self, table):
+    #gray = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
+    _, binary = cv.threshold(table, 150, 255, cv.THRESH_BINARY_INV)
+    contours, _ = cv.findContours(binary, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    contour = max(contours, key=cv.contourArea)
+    
+    (h, w) = table.shape[:2]
+    default_center = (w // 2, h // 2)
+    
+    if contour is None:
+      return default_center
+    
+    global_min_y = float('inf')
+    global_max_y = float('-inf')
+
+    global_min_y = min(point[0][1] for point in contour)
+    global_max_y = max(point[0][1] for point in contour)
+
+    middle_y = (global_min_y + global_max_y) / 2
+
+    upper_half = [point[0] for point in contour if point[0][1] < middle_y]
+    lower_half = [point[0] for point in contour if point[0][1] >= middle_y]
+    
+    top_left = (min(point[0] for point in upper_half), min(point[1] for point in upper_half))
+    top_right = (max(point[0] for point in upper_half), min(point[1] for point in upper_half))
+    bottom_left = (min(point[0] for point in lower_half), max(point[1] for point in lower_half))
+    bottom_right = (max(point[0] for point in lower_half), max(point[1] for point in lower_half))
+    
+    center_x = (top_left[0] + top_right[0] + bottom_right[0] + bottom_left[0]) // 4
+    center_y = (top_left[1] + top_right[1] + bottom_right[1] + bottom_left[1]) // 4
+    center = (center_x, center_y)
+         
+    allowed_deviation = 100 
+    if (abs(center[0] - default_center[0]) > allowed_deviation or abs(center[1] - default_center[1]) > allowed_deviation):
+        return default_center
+    
+    return center
+    

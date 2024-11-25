@@ -122,7 +122,6 @@ def main():
     ### for local testskript only 
     pdf_path = "scan_1972_CdB_10_20231125162253.pdf"
     ###
-    
     table = load_and_segment_pdf(pdf_path, [1, 6], main_dir)
     csvSpecies, csvNr = process_images(table, bird_cnn, number_cnn)
     save_results(csvSpecies, csvNr, species_output, numbers_output)
