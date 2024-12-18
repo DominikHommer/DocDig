@@ -3,6 +3,7 @@ from pathlib import Path
 from pdf2image import convert_from_path
 import cv2 as cv
 import math
+import statistics
 import matplotlib.pyplot as plt
 
 class SegmentationClient:
@@ -33,20 +34,33 @@ class SegmentationClient:
             slope = (y2 - y1) / (x2 - x1)
             angle_to_horizontal = np.degrees(np.arctan(slope))
             angles_to_horizontal.append(angle_to_horizontal)
-        else :
-            angles_to_horizontal.append(-90)
 
-    filtered_angles = [90 - angle if angle > 0 else angle for angle in angles_to_horizontal]
-    rotation_angle = filtered_angles[0]
+    if len(angles_to_horizontal) == 0:
+        print("Keine Winkel gefunden, daher keine Rotation.")
+        return img
 
-    if rotation_angle < 0:
-      rotation_angle = 90 + rotation_angle
+    median_angle = np.median(angles_to_horizontal)
+
+    filtered_angles = [angle for angle in angles_to_horizontal if abs(angle - median_angle) < 0.5]
+
+    if len(filtered_angles) == 0:
+        print("Keine gültigen Winkel nach Filterung gefunden, daher keine Rotation.")
+        return img
+
+    rotation_angle = np.mean(filtered_angles)
+
+    if rotation_angle < -45:
+        rotation_angle += 90
+    elif rotation_angle > 45:
+        rotation_angle -= 90
 
     (h, w) = img.shape[:2]
-    center = (0,0)
-    M = cv.getRotationMatrix2D(center, rotation_angle, 1.0)
+    center = (w // 2, h // 2)
 
-    return cv.warpAffine(img, M, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
+    M = cv.getRotationMatrix2D(center, rotation_angle, 1.0)
+    rotated_img = cv.warpAffine(img, M, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
+
+    return rotated_img
 
   def cellPostProcessing(self, cell):
       ##
@@ -153,8 +167,30 @@ class SegmentationClient:
     # At least minFoundLines in a x-threshold must be found, otherwise we consider the line as invalid detected
     return list(filter(lambda l: l[1] >= minFoundLines, verticalLines))
 
+  def getYStartEndForLine(self, i, lines):
+    hLine = lines[i]
+    _, y1, _, y2 = hLine[0]
 
-  def imageToCells(self, imgPath, colNr):
+    # This basically gets the maximum (possible) height of the row
+    start = 0
+    if (i > 0):
+        pLine = lines[i - 1]
+
+        py1 = pLine[0][1]
+        py2 = pLine[0][3]
+
+        start = py1
+        if (py2 < py1):
+            start = py2
+
+    end = y1
+    if (y2 > end):
+        end = y2
+
+    return start, end
+
+
+  def imageToCells(self, imgPath, colNr, useCellHeightMedian = False):
     ##
     # Segment image to cells for column
     ##
@@ -166,7 +202,6 @@ class SegmentationClient:
 
     # Detect vertical lines of image and try to rotate it
     gray = cv.bitwise_not(img)
-
     thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
 
     iHeight, iWidth = thresh.shape[:2]
@@ -191,6 +226,8 @@ class SegmentationClient:
     minFoundLines = 2
 
     gray = cv.bitwise_not(img)
+
+    #cv.imwrite(imgPath + "-gray.jpg", cv.cvtColor(gray ,cv.COLOR_GRAY2RGB))
     thresh = cv.threshold(gray, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
 
     blur = cv.GaussianBlur(thresh, (5, iHeightPart), 0)
@@ -229,9 +266,10 @@ class SegmentationClient:
             end = x2
 
         xSplits.append([start, end])
-        #cv.line(threshCopy,(x1,y1),(x2,y2),(0,255,0),2)
+        cv.line(threshCopy,(x1,y1),(x2,y2),(0,255,0),2)
 
     #cv2_imshow(threshCopy)
+    cv.imwrite(imgPath + "-vertical.jpg", threshCopy)
 
     xSplits.append([xSplits[-1][-1], iWidth])
     xSplits = np.sort(xSplits, axis=0)
@@ -246,7 +284,7 @@ class SegmentationClient:
         if end - start <= xThres:
             continue
 
-        doneSplits.append(thresh[:, start:end + 15])
+        doneSplits.append(gray[:, start:end + 15])
 
     # Skip image if not enough columns are detected
     if len(doneSplits) < 10:
@@ -261,6 +299,8 @@ class SegmentationClient:
 
     # TODO: remove the header cell of a column
 
+    cv.imwrite(imgPath + "-column-" + str(colNr) + ".jpg", colTest)
+    cv.imwrite(imgPath + "-column-" + str(colNr) + "-white.jpg", cv.cvtColor(cv.bitwise_not(colTest) ,cv.COLOR_GRAY2RGB))
 
     # Segement column into cells
     copyTest = np.copy(colTest)
@@ -280,8 +320,12 @@ class SegmentationClient:
     colBlur = cv.GaussianBlur(colTest, (iWidth, 3), 0)
     colBlur = cv.GaussianBlur(colTest, (iWidth, 1), 0)
 
+    #cv.imwrite(imgPath + "-column-" + str(colNr) + "-horizontal-blur.jpg", colBlur)
+
     colDenoised = cv.fastNlMeansDenoising(colBlur, None, 30)
     colCanny = cv.Canny(colDenoised, 10, 200)
+
+    cv.imwrite(imgPath + "-column-" + str(colNr) + "-horizontal-blur.jpg", colBlur)
 
     houghThreshold = 100
     minLineLength = 35
@@ -358,9 +402,53 @@ class SegmentationClient:
         #cv.line(copyRGB,(x1,y1),(x2,y2),(0,255,0),2)
 
     #cv2_imshow(copyRGB)
+    cv.imwrite(imgPath + "-column-" + str(colNr) + "-horizontal.jpg", copyRGB)
 
     ySplits.append([ySplits[-1][-1], iHeight])
     ySplits = np.sort(ySplits, axis=0)
+
+    if useCellHeightMedian:
+      realSplits = []
+      heights = []
+
+      for splits in ySplits:
+        start, end = splits
+
+        if start == 0:
+            continue
+
+        height = end - start
+        if height <= yThres:
+            continue
+
+        heights.append(height)
+
+      heightMedian = statistics.median(heights)
+
+      for splits in ySplits:
+        start, end = splits
+
+        if start == 0:
+            continue
+
+        height = end - start
+        if height <= yThres:
+            continue
+
+        if height >= heightMedian * 1.75:
+          while height > heightMedian * 1.75:
+              newEnd = int(start + heightMedian)
+
+              realSplits.append([start, newEnd])
+
+              start = newEnd
+              height = end - start
+
+          realSplits.append([start, end])
+        else:
+           realSplits.append(splits)
+
+      ySplits = realSplits
 
     doneRowSplits = []
     for splits in ySplits:
@@ -376,6 +464,7 @@ class SegmentationClient:
 
     return doneRowSplits
 
+  def prepare_folders(self, path, columnNumber, gen_path_handle = 'gen_img'):
   def imageToColorCells(self, imgPath, colNr):
     ##
     # Segment image to cells for column
@@ -610,28 +699,36 @@ class SegmentationClient:
     # Transform pdf into cells of defined column and safe them as seperate images into a folder
     ##
     fileName = path[-path.rfind('/') - 1:]
-    pdf_images = convert_from_path(path)
-
-    dPath = self.MAIN_DIRECTORY + "/gen_img/" + fileName
+    Path(self.MAIN_DIRECTORY + "/" + gen_path_handle).mkdir(parents=True, exist_ok=True)
+    dPath = self.MAIN_DIRECTORY + "/" + gen_path_handle + "/" + fileName
     Path(dPath).mkdir(parents=True, exist_ok=True)
     Path(dPath + "/cells/").mkdir(parents=True, exist_ok=True)
-    Path(dPath + "/cells/NOPRE-COLOR-col-" + str(columnNumber)).mkdir(parents=True, exist_ok=True)
+    Path(dPath + "/cells/col-" + str(columnNumber)).mkdir(parents=True, exist_ok=True)
+
+    return dPath
+
+  def pdf_scan_to_cells_of_columns(self, path, columnNumber):
+    ##
+    # Transform pdf into cells of defined column and safe them as seperate images into a folder
+    ##
+    pdf_images = convert_from_path(path)
+    dPath = self.prepare_folders(path, columnNumber)
 
     result = []
     for idx in range(len(pdf_images)):
-        imgPath = dPath + "/" + str(idx+1) +'.png'
-        pdf_images[idx].save(imgPath, 'PNG')
+        imgPath = dPath + "/" + str(idx+1) +'.jpg'
+        pdf_images[idx].save(imgPath, 'JPEG')
 
         result.append([])
 
-        cells = self.imageToColorCells(imgPath, columnNumber)
+        cells = self.imageToCells(imgPath, columnNumber)
         if not cells:
           continue
 
         for cidx, cell in enumerate(cells):
-            #cell = self.cellPostProcessing(cell)
+            cell = self.cellPostProcessing(cell)
 
             result[idx].append(cell)
-            cv.imwrite(dPath + "/cells/NOPRE-COLOR-col-" + str(columnNumber) + "/" + str(idx) + '-' + str(cidx) + '.png', cell)
+            cv.imwrite(dPath + "/cells/col-" + str(columnNumber) + "/" + str(idx) + '-' + str(cidx) + '.png', cell)
 
     return result
