@@ -1,0 +1,6 @@
+
+"structure" ist hier mit angegeben da sonst der Code nicht funtioniert, das file "example_for_using_table_detection.py" verwendet allerdings lediglich die detection.
+Bei structure würden auch noch zeilen/spalten erkannt werden, funktioniert aber für unseren anwendungsfall nicht wirklich gut. 
+
+detection => https://huggingface.co/bsmock/tatr-pubtables1m-v1.0/resolve/main/pubtables1m_detection_detr_r18.pth?download=true
+structure => https://huggingface.co/bsmock/tatr-pubtables1m-v1.0/resolve/main/pubtables1m_structure_detr_r18.pth?download=true
