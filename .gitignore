@@ -9,5 +9,8 @@ table_transformer/detr/models/__pycache__/
 table_transformer/detr/util/__pycache__/
 pubtables1m_detection_detr_r18.pth
 pubtables1m_structure_detr_r18.pth
+Dataset/__pycache__
+Dataset/Utils/__pycache__
+TableDetector/__pycache__
 *.pyc
 *.pth
