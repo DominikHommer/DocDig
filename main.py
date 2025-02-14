@@ -108,8 +108,6 @@ def segment_single_file():
         return
 
     for cidx, cell in enumerate(cells):
-        #cell = sgc.cellPostProcessing(cell)
-
         cv.imwrite(dPath + "/cells/col-" + str(col_nr) + "/" + str(cidx) + '.png', cell)
 
 def main():
@@ -128,23 +126,16 @@ def main():
     species_model_path = os.getenv('SPECIES_KERAS_DIR', 'vogelarten_best_model.keras')
     number_model_path = os.getenv('MNIST_KERAS_DIR', 'mnist_cnn_model.keras')
 
-    pdf_path = test_file
-
     bird_cnn = load_model(species_model_path)
     number_cnn = load_model(number_model_path)
     species_output = os.getenv('SPECIES_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predictions.csv')
     numbers_output = os.getenv('NUMBERS_OUTPUT_DIR', '/Users/MeinNotebook/Desktop/predicitons_numbers.csv')
     
-    
-    ### for local testskript only 
-    pdf_path = "scan_1972_CdB_10_20231125162253.pdf"
-    ###
-    
-    table = load_and_segment_pdf(pdf_path, [1, 6], main_dir)
+    table = load_and_segment_pdf(test_file, [1, 6], main_dir)
     csvSpecies, csvNr = process_images(table, bird_cnn, number_cnn)
     #save_results(csvSpecies, csvNr, species_output, numbers_output)
 
 if __name__ == "__main__":
     load_dotenv()
-    #main()
-    segment_single_file()
+    main()
+    #segment_single_file()

@@ -4,10 +4,23 @@ from pdf2image import convert_from_path
 import cv2 as cv
 import math
 import statistics
+import os 
+
+from tatr import inference
 
 class SegmentationClient:
   def __init__(self, path = '/Users/MeinNotebook/Google Drive/Meine Ablage/Scans') -> None:
      self.MAIN_DIRECTORY = path
+
+     inference.TableExtractionPipeline(
+            det_config_path='./detection_config.json',
+            det_model_path='./pubtables1m_detection_detr_r18.pth', 
+            det_device='cpu', 
+            str_config_path='./structure_config.json', 
+            str_model_path='./pubtables1m_structure_detr_r18.pth', 
+            str_device='cpu'
+        )
+     #self.tatr = tatr_client.TatrClient(os.getenv('TATR_MODEL', './tatr/'))
 
   def rotateImg(self, img, verticalL):
     ##
@@ -470,6 +483,9 @@ class SegmentationClient:
     for idx in range(len(pdf_images)):
         imgPath = dPath + "/" + str(idx+1) +'.jpg'
         pdf_images[idx].save(imgPath, 'JPEG')
+
+        self.tatr.extractTable(imgPath)
+        return
 
         result.append([])
 
