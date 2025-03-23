@@ -610,7 +610,7 @@ class SegmentationClient:
     # Transform pdf into cells of defined column and safe them as seperate images into a folder
     ##
     fileName = path[-path.rfind('/') - 1:]
-    pdf_images = convert_from_path(path)
+    pdf_images = convert_from_path(self.MAIN_DIRECTORY + path)
 
     dPath = self.MAIN_DIRECTORY + "/gen_img/" + fileName
     Path(dPath).mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,5 @@
 .env
 Scans/*
 __pycache__/*
+AutoEncoders/table_data/*
+AutoEncoders/wtw_data/*
