@@ -1,4 +1,3 @@
-.env
 Scans/*
 __pycache__/*
 table_transformer/__pycache__/
@@ -14,3 +13,15 @@ Dataset/Utils/__pycache__
 TableDetector/__pycache__
 *.pyc
 *.pth
+debug/*
+data/input/*
+data/output/*
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
