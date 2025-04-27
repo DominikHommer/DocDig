@@ -8,6 +8,77 @@ import statistics
 from libs.cv_helpers import getVerticalLines
 from .module_base import Module
 
+import numpy as np
+from statistics import median
+from typing import List, Dict, Any
+
+def compute_mean_widths(all_widths: List[List[float]]) -> np.ndarray:
+    # Matrix mit NaNs auffüllen, um Spalten-Mittel zu berechnen
+    n_pages = len(all_widths)
+    max_len = max(len(w) for w in all_widths)
+    mat = np.full((n_pages, max_len), np.nan, dtype=float)
+    for i, w in enumerate(all_widths):
+        mat[i, :len(w)] = w
+    return np.nanmean(mat, axis=0)
+
+def unify_page_columns(
+    page: Dict[str, Any],
+    mean_widths: np.ndarray,
+    target_n: int,
+    width_tolerance: float = 0.5
+) -> Dict[str, Any]:
+    """
+    Ordnet jede Ziel-Spalte (0..target_n-1) der Page zu, indem
+    die Spalte mit der nächstliegenden Breite ausgewählt wird.
+    Liegt der Unterschied über (mean_widths[j] * width_tolerance),
+    wird eine leere Spalte eingefügt.
+    """
+    w_rgb   = page['columns_rgb']
+    w_gray  = page['columns_gray']
+    w_width = page['split_widths']
+
+    used_idxs = set()
+    new_rgb, new_gray, new_widths = [], [], []
+
+    for j in range(target_n):
+        # Differenzen nur für nicht-verwendete Spalten
+        diffs = [
+            abs(w_width[k] - mean_widths[j]) if k not in used_idxs else np.inf
+            for k in range(len(w_width))
+        ]
+        best_k = int(np.argmin(diffs))
+        if diffs[best_k] <= mean_widths[j] * width_tolerance:
+            used_idxs.add(best_k)
+            new_rgb.append(w_rgb[best_k])
+            new_gray.append(w_gray[best_k])
+            new_widths.append(w_width[best_k])
+        else:
+            # Kein passender Fit → leere Spalte
+            new_rgb.append([])
+            new_gray.append([])
+            new_widths.append([])
+
+    return {
+        'columns_rgb':   new_rgb,
+        'columns_gray':  new_gray,
+        'split_widths':  new_widths,
+    }
+
+def unify_all_pages(result: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # 1) Alle Breiten sammeln
+    all_widths = [page['split_widths'] for page in result]
+
+    # 2) Mean-Widths und Ziel-Anzahl bestimmen
+    mean_widths = compute_mean_widths(all_widths)
+    target_n    = int(median(len(w) for w in all_widths))
+
+    # 3) Jede Page vereinheitlichen
+    return [
+        unify_page_columns(page, mean_widths, target_n)
+        for page in result
+    ]
+
+
 class ColumnExtractorResult:
     columns_rgb: list[np.ndarray]
     columns_gray: list[np.ndarray]
@@ -123,88 +194,7 @@ class ColumnExtractor(Module):
                 for j, col_img in enumerate(doneSplitsRGB):
                     cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{page_i}_column_{j}.jpg", col_img)
 
-        # Post-Processing step
-        # We somehow need to unify column lengths
-        lenArr = []
-        for _, res in enumerate(result):    
-            lenArr.append(len(res['columns_rgb']))
-
-        n_results = len(result)
-        max_len   = max(len(r["split_widths"]) for r in result)
-        data = np.full((n_results, max_len), np.nan)
-        for i, r in enumerate(result):
-            w = r["split_widths"]
-            data[i, :len(w)] = w
-
-        mean_widths = np.nanmean(data, axis=0)
-
-        # We assume the median is the correct amount
-        lenMedian = statistics.median(lenArr)
-    
-        continue_from = None
-        formatted_result = []
-        for page in result:
-            maxLen = len(page['columns_gray'])
-            allowed_spread = abs(maxLen - lenMedian)
-
-            if allowed_spread == 0:
-                formatted_result.append(page)
-
-                continue
-            
-            c_rgb = []
-            c_gray = []
-            c_widths = []
-            for col in range(lenMedian):
-                selected_col_nr = None
-                for spread in range(col, col + allowed_spread + 1):
-                    if spread >= maxLen:
-                        continue
-
-                    print("spread", spread, col)
-                    print(abs(page['split_widths'][spread] - mean_widths[col]))
-                    print(mean_widths[col] / 2)
-                    if not selected_col_nr and abs(page['split_widths'][spread] - mean_widths[col]) <= (mean_widths[col] / 2):
-                        selected_col_nr = spread
-                        print(selected_col_nr)
-
-                if selected_col_nr is None:
-                    c_rgb.append([])
-                    c_gray.append([])
-                    c_widths.append([])
-
-                    continue
-                
-                if col != selected_col_nr:
-                    allowed_spread -= 1
-
-                c_rgb.append(page['columns_rgb'][selected_col_nr]),
-                c_gray.append(page['columns_gray'][selected_col_nr])
-                c_widths.append(page['split_widths'][selected_col_nr])
-
-                # All spreads consumed, fill table as it is now
-                if allowed_spread == 0:
-                    continue_from = selected_col_nr
-                    break
-
-            if continue_from is not None:
-                for col in range(continue_from, lenMedian):
-                    if len(page['columns_rgb']) >= col:
-                        c_rgb.append([])
-                        c_gray.append([])
-                        c_widths.append([])
-                    else:
-                        c_rgb.append(page['columns_rgb'][col]),
-                        c_gray.append(page['columns_gray'][col])
-                        c_widths.append(page['split_widths'][col])
-
-            page = {
-                "columns_rgb": c_rgb,
-                "columns_gray": c_gray,
-                "split_widths": c_widths,
-            }
-
-            formatted_result.append(page)
-
-        return formatted_result
+        # Do we really need this?
+        # Maybe we can map after transcription based on the header
+        return unify_all_pages(result)
 

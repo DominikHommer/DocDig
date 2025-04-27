@@ -34,154 +34,167 @@ class RowExtractor(Module):
     def process(self, data: dict, config: dict) -> list[str]:
         pages: list = data['column-extractor']
 
-        COL_NR = 1 # Just for faster testing and less loops.....
+        results = []
         for page_i, page in enumerate(pages):
-            # Segement column into cells
-            copyTest = np.copy(page['columns_gray'][COL_NR])
-            copyRGB = np.copy(page['columns_rgb'][COL_NR])
+            page_data = {
+                "columns": [list() for _ in range(len(page['columns_gray']))]
+            }
 
-            iHeight, iWidth = copyTest.shape[:2]
+            for col_nr, col in enumerate(page['columns_gray']):
+                copyTest = np.copy(col)
+                copyRGB = np.copy(col)
 
-            copyTest = cv2.bitwise_not(copyTest)
+                if len(copyTest.shape) < 2:
+                    page_data['columns'][col_nr] = []
 
-            if iWidth % 2 == 0:
-                iWidth = iWidth + 1
-
-            iWidthPart = math.floor(iWidth / 4)
-            if iWidthPart % 2 == 0:
-                iWidthPart = iWidthPart + 1
-
-            colBlur = cv2.GaussianBlur(copyTest, (iWidth, 5), 0)
-            colBlur = cv2.GaussianBlur(copyTest, (iWidth, 3), 0)
-            colBlur = cv2.GaussianBlur(copyTest, (iWidth, 1), 0)
-
-            colDenoised = cv2.fastNlMeansDenoising(colBlur, None, 30)
-            colCanny = cv2.Canny(colDenoised, 10, 200)
-
-            houghThreshold = 100
-            minLineLength = 35
-
-            # Small cells should have "smaller" thresholds to detect lines
-            if iWidth < 200:
-                houghThreshold = 50
-                minLineLength = 10
-
-            lines = cv2.HoughLinesP(colCanny, 1, np.pi / 180, threshold=houghThreshold, minLineLength=minLineLength, maxLineGap=2)
-
-            # Skip image if no horizontal lines found
-            if lines is None:
-                return
-
-            # We define a 30px y-Threshold, which "decides" if a line is indeed a horizontal detected line
-            yThres = 30
-            horizontalLines = []
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-
-                # Skip value, as it is not a horizontal line
-                if not ((y1 + yThres) > y2 and (y1 - yThres) < y2):
                     continue
 
-                shouldAdd = True
+                iHeight, iWidth = copyTest.shape[:2]
+
+                copyTest = cv2.bitwise_not(copyTest)
+
+                if iWidth % 2 == 0:
+                    iWidth = iWidth + 1
+
+                iWidthPart = math.floor(iWidth / 4)
+                if iWidthPart % 2 == 0:
+                    iWidthPart = iWidthPart + 1
+
+                colBlur = cv2.GaussianBlur(copyTest, (iWidth, 5), 0)
+                colBlur = cv2.GaussianBlur(copyTest, (iWidth, 3), 0)
+                colBlur = cv2.GaussianBlur(copyTest, (iWidth, 1), 0)
+
+                colDenoised = cv2.fastNlMeansDenoising(colBlur, None, 30)
+                colCanny = cv2.Canny(colDenoised, 10, 200)
+
+                houghThreshold = 100
+                minLineLength = 35
+
+                # Small cells should have "smaller" thresholds to detect lines
+                if iWidth < 200:
+                    houghThreshold = 50
+                    minLineLength = 10
+
+                lines = cv2.HoughLinesP(colCanny, 1, np.pi / 180, threshold=houghThreshold, minLineLength=minLineLength, maxLineGap=2)
+
+                # Skip image if no horizontal lines found
+                if lines is None:
+                    return
+
+                # We define a 30px y-Threshold, which "decides" if a line is indeed a horizontal detected line
+                yThres = 30
+                horizontalLines = []
+                for line in lines:
+                    x1, y1, x2, y2 = line[0]
+
+                    # Skip value, as it is not a horizontal line
+                    if not ((y1 + yThres) > y2 and (y1 - yThres) < y2):
+                        continue
+
+                    shouldAdd = True
+                    for i in range(len(horizontalLines)):
+                        hLine = horizontalLines[i]
+                        h_x1, h_y1, h_x2, h_y2 = hLine[0]
+
+                        # Check if "line" Vector is above / under "hLine" Vector and in its y-threshold
+                        # Update horizontalLines List accordingly
+                        if (x1 < h_x1) and ((h_y1 + yThres) > y1 and (h_y1 - yThres) < y1):
+                            horizontalLines[i] = [[x1, y1, h_x2, h_y2], hLine[1]+1]
+
+                            shouldAdd = False
+                        elif (x2 > h_x2) and ((h_y2 + yThres) > y2 and (h_y2 - yThres) < y2):
+                            horizontalLines[i] = [[h_x1, h_y1, x2, y2], hLine[1]+1]
+
+                            shouldAdd = False
+
+                    if shouldAdd == True:
+                        horizontalLines.append([line[0], 0])
+
+                minFoundLines = 1
+                if iWidth < 200:
+                    minFoundLines = 0
+
+                ySplits = [[0, 0]]
+
+                horizontalLines = list(filter(lambda l: l[1] >= minFoundLines, horizontalLines))
+
                 for i in range(len(horizontalLines)):
                     hLine = horizontalLines[i]
-                    h_x1, h_y1, h_x2, h_y2 = hLine[0]
+                    x1, y1, x2, y2 = hLine[0]
 
-                    # Check if "line" Vector is above / under "hLine" Vector and in its y-threshold
-                    # Update horizontalLines List accordingly
-                    if (x1 < h_x1) and ((h_y1 + yThres) > y1 and (h_y1 - yThres) < y1):
-                        horizontalLines[i] = [[x1, y1, h_x2, h_y2], hLine[1]+1]
+                    # This basically gets the maximum (possible) height of the row
+                    start, end = getYStartEndForLine(i, horizontalLines)
+                    
+                    ySplits.append([start, end])
+                    cv2.line(copyRGB,(x1,y1),(x2,y2),(0,255,0),2)
 
-                        shouldAdd = False
-                    elif (x2 > h_x2) and ((h_y2 + yThres) > y2 and (h_y2 - yThres) < y2):
-                        horizontalLines[i] = [[h_x1, h_y1, x2, y2], hLine[1]+1]
+                if self.debug:
+                    cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{page_i}_column_{col_nr}_rows.jpg", copyRGB)
 
-                        shouldAdd = False
+                ySplits.append([ySplits[-1][-1], iHeight])
+                ySplits = np.sort(ySplits, axis=0)
 
-                if shouldAdd == True:
-                    horizontalLines.append([line[0], 0])
+                realSplits = []
+                heights = []
 
-            minFoundLines = 1
-            if iWidth < 200:
-                minFoundLines = 0
+                for splits in ySplits:
+                    start, end = splits
 
-            ySplits = [[0, 0]]
+                    if start == 0:
+                        continue
 
-            horizontalLines = list(filter(lambda l: l[1] >= minFoundLines, horizontalLines))
+                    height = end - start
+                    if height <= yThres:
+                        continue
+                    
+                    heights.append(height)
 
-            for i in range(len(horizontalLines)):
-                hLine = horizontalLines[i]
-                x1, y1, x2, y2 = hLine[0]
-
-                # This basically gets the maximum (possible) height of the row
-                start, end = getYStartEndForLine(i, horizontalLines)
+                heightMedian = statistics.median(heights)
                 
-                ySplits.append([start, end])
-                cv2.line(copyRGB,(x1,y1),(x2,y2),(0,255,0),2)
+                for splits in ySplits:
+                    start, end = splits
 
-            if self.debug:
-                cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{page_i}_column_{COL_NR}_rows.jpg", copyRGB)
+                    if start == 0:
+                        continue
 
-            ySplits.append([ySplits[-1][-1], iHeight])
-            ySplits = np.sort(ySplits, axis=0)
+                    height = end - start
+                    if height <= yThres:
+                        continue
+                    
+                    if height >= heightMedian * 1.75:
+                        while height > heightMedian * 1.75:
+                            newEnd = int(start + heightMedian)
 
-            realSplits = []
-            heights = []
+                            realSplits.append([start, newEnd])
 
-            for splits in ySplits:
-                start, end = splits
+                            start = newEnd
+                            height = end - start
+                    
+                        realSplits.append([start, end])
+                    else:
+                        realSplits.append(splits)
 
-                if start == 0:
-                    continue
+                ySplits = realSplits
 
-                height = end - start
-                if height <= yThres:
-                    continue
+                doneRowSplits = []
+                for splits in ySplits:
+                    start, end = splits
+
+                    if start == 0:
+                        continue
+
+                    if end - start <= yThres:
+                        continue
+
+                    doneRowSplits.append(copyTest[start:end + 15,:])
                 
-                heights.append(height)
+                if self.debug:
+                    for j, row_img in enumerate(doneRowSplits):
+                        cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{page_i}_column_{col_nr}_row_{j}.jpg", row_img)
 
-            heightMedian = statistics.median(heights)
+                page_data['columns'][col_nr] = doneRowSplits
             
-            for splits in ySplits:
-                start, end = splits
+            results.append(page_data)
 
-                if start == 0:
-                    continue
-
-                height = end - start
-                if height <= yThres:
-                    continue
-                
-                if height >= heightMedian * 1.75:
-                    while height > heightMedian * 1.75:
-                        newEnd = int(start + heightMedian)
-
-                        realSplits.append([start, newEnd])
-
-                        start = newEnd
-                        height = end - start
-                
-                    realSplits.append([start, end])
-                else:
-                    realSplits.append(splits)
-
-            ySplits = realSplits
-
-            doneRowSplits = []
-            for splits in ySplits:
-                start, end = splits
-
-                if start == 0:
-                    continue
-
-                if end - start <= yThres:
-                    continue
-
-                doneRowSplits.append(copyTest[start:end + 15,:])
-            
-            if self.debug:
-                for j, row_img in enumerate(doneRowSplits):
-                    cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{page_i}_column_{COL_NR}_row_{j}.jpg", row_img)
-
-        return []
+        return results
 
