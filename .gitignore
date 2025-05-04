@@ -12,5 +12,7 @@ pubtables1m_structure_detr_r18.pth
 Dataset/__pycache__
 Dataset/Utils/__pycache__
 TableDetector/__pycache__
+Scans_for_Dataset/
+Scans_for_Dataset/Dataset.zip
 *.pyc
 *.pth

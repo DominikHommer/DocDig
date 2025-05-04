@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 
 from TableDetector.table_detector import TableDetector
 
+
 import cv2 as cv
 import pytesseract
 import pandas as pd
