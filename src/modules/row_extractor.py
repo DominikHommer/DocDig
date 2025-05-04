@@ -15,7 +15,7 @@ class RowExtractor(Module):
     def __init__(self,
                  debug: bool = False,
                  debug_folder: str = "debug/debug_row_extractor/"):
-        super().__init__("row-extractor")
+        super().__init__("row-extractor") 
         self.debug = debug
         self.debug_folder = debug_folder
 
