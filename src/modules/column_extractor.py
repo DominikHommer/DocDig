@@ -86,14 +86,18 @@ class ColumnExtractorResult:
 
 class ColumnExtractor(Module):
     def __init__(self,
+                 minFoundColumns: int = 5,
+                 try_experimental_unify: bool = False,
                  debug: bool = False,
                  debug_folder: str = "debug/debug_column_extractor/"):
         super().__init__("column-extractor")
         self.debug = debug
         self.debug_folder = debug_folder
 
+        self.try_experimental_unify = try_experimental_unify
         self.xThres = 40
         self.minFoundLines = 2
+        self.minFoundColumns = minFoundColumns
 
         if self.debug:
             if os.path.exists(self.debug_folder):
@@ -131,8 +135,16 @@ class ColumnExtractor(Module):
             verticalLines = getVerticalLines(blur, self.xThres, self.minFoundLines)
 
             # Skip image if no vertical lines found
-            if not verticalLines:
-                return
+            if not verticalLines or len(verticalLines) < self.minFoundColumns:
+                page: ColumnExtractorResult = {
+                    'columns_rgb': [],
+                    'columns_gray': [],
+                    'split_widths': [],
+                }
+
+                result.append(page)
+
+                continue
             
             xSplits = [[0, 0]]
 
@@ -193,6 +205,9 @@ class ColumnExtractor(Module):
             if self.debug:
                 for j, col_img in enumerate(doneSplitsRGB):
                     cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{page_i}_column_{j}.jpg", col_img)
+
+        if not self.try_experimental_unify:
+            return result
 
         # Do we really need this?
         # Maybe we can map after transcription based on the header

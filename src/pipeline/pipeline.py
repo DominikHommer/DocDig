@@ -19,23 +19,23 @@ class Pipeline:
         load_dotenv()
 
         if not os.path.exists("./config/detection_config.json"):
-            print("[TATR Error]: detection_config.json missing")
+            print("[TATR Error]: ./config/detection_config.json missing")
             return False
         
         if not os.path.exists("./config/structure_config.json"):
-            print("[TATR Error]: structure_config.json missing")
+            print("[TATR Error]: ./config/structure_config.json missing")
             return False
         
         if not os.path.exists("./config/pubtables1m_detection_detr_r18.pth"):
-            print("[TATR Error]: pubtables1m_detection_detr_r18.pth missing. See link_to_tatr_models.txt")
+            print("[TATR Error]: ./config/pubtables1m_detection_detr_r18.pth missing. See link_to_tatr_models.txt")
             return False
         
         if not os.path.exists("./config/pubtables1m_structure_detr_r18.pth"):
-            print("[TATR Error]: pubtables1m_structure_detr_r18.pth missing. See link_to_tatr_models.txt")
+            print("[TATR Error]: ./config/pubtables1m_structure_detr_r18.pth missing. See link_to_tatr_models.txt")
             return False
         
         if not os.path.exists("./config/denoise_model.keras"):
-            print("[Denoise Error]: denoise_model.keras missing.")
+            print("[Denoise Error]: ./config/denoise_model.keras missing.")
             return False
         
         self.config = {
