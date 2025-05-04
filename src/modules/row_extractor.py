@@ -9,7 +9,7 @@ from libs.cv_helpers import getYStartEndForLine
 from .module_base import Module
 
 class RowExtractorResult:
-    pass
+    columns: list[list[np.ndarray]]
 
 class RowExtractor(Module):
     def __init__(self,
@@ -36,7 +36,7 @@ class RowExtractor(Module):
 
         results = []
         for page_i, page in enumerate(pages):
-            page_data = {
+            page_data: RowExtractorResult = {
                 "columns": [list() for _ in range(len(page['columns_gray']))]
             }
 
@@ -79,7 +79,9 @@ class RowExtractor(Module):
 
                 # Skip image if no horizontal lines found
                 if lines is None:
-                    return
+                    page_data['columns'][col_nr] = []
+
+                    continue
 
                 # We define a 30px y-Threshold, which "decides" if a line is indeed a horizontal detected line
                 yThres = 30
