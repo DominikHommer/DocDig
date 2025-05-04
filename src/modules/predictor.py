@@ -1,41 +1,62 @@
 import os
+import json
 import numpy as np
 import cv2
-from .module_base import Module
-from tensorflow.keras.models import load_model
 from typing import List
+from tensorflow.keras.models import load_model
+from .module_base import Module
+
 
 class Predictor(Module):
-    def __init__(self, model_path: str = "./config/classifier_model.keras", target_size=(80, 384), class_labels: List[str] = None):
+    def __init__(
+        self,
+        model_path: str = "./config/classifier_model.keras",
+        label_path: str = "./config/class_indices.json"
+    ):
         super().__init__("predictor")
-        self.model_path = model_path
         self.model = load_model(model_path)
-        self.target_size = target_size  # Muss zum Trainingsinput des Modells passen
-        self.class_labels = class_labels  # Optional: z. B. ['A', 'B', ..., 'Z']
+        self.target_size = (150, 22)
+
+        self.class_labels = None
+        if label_path and os.path.exists(label_path):
+            with open(label_path, "r", encoding="utf-8") as f:
+                name_to_idx = json.load(f)
+
+            # Erzeuge korrektes Mapping: index → label
+            idx_to_label = {int(v): k for k, v in name_to_idx.items()}
+            # Sortiere nach Index (0 bis N-1)
+            self.class_labels = [idx_to_label[i] for i in range(len(idx_to_label))]
 
     def get_preconditions(self) -> List[str]:
         return ['cell-denoiser']
 
-    def process(self, data: dict, config: dict) -> List[str]:
-        cleaned_images = data['cell-denoiser']
+    def process(self, data: dict, config: dict) -> List[dict]:
+        denoised_pages = data['cell-denoiser']
         predictions = []
 
-        for img in cleaned_images:
-            if img is None:
-                predictions.append(None)
-                continue
+        for page in denoised_pages:
+            page_prediction = {"columns": []}
 
-            img_resized = cv2.resize(img, self.target_size)
-            img_resized = np.expand_dims(img_resized, axis=-1)  # Kanal hinzufügen
-            img_resized = np.expand_dims(img_resized, axis=0)   # Batch-Dimension
-            img_resized = img_resized.astype("float32") / 255.0
+            for col in page["columns"]:
+                col_preds = []
 
-            pred = self.model.predict(img_resized)
-            pred_class = np.argmax(pred, axis=1)[0]
+                for img in col:
+                    img_resized = cv2.resize(img, self.target_size)
+                    img_resized = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2RGB)
+                    img_resized = np.expand_dims(img_resized, axis=0)
+                    img_resized = img_resized.astype("float32") / 255.0
 
-            if self.class_labels:
-                predictions.append(self.class_labels[pred_class])
-            else:
-                predictions.append(pred_class)
+                    pred = self.model.predict(img_resized)
+                    pred_class = int(np.argmax(pred, axis=1)[0])
+
+                    if self.class_labels:
+                        label = self.class_labels[pred_class]
+                        col_preds.append(label)
+                    else:
+                        col_preds.append(pred_class)
+
+                page_prediction["columns"].append(col_preds)
+
+            predictions.append(page_prediction)
 
         return predictions
