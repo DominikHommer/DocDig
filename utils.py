@@ -118,7 +118,7 @@ def remove_black_pixels(image):  # detect all non-black pixels
     return white
 
 
-def detectQuotationMarks(image, relative_non_white_threshold=0.1157):
+def detectQuotationMarks(image, relative_non_white_threshold=0.05):
     # Convert the image to HSV color space
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
@@ -242,6 +242,30 @@ def write_ocr_outputs_to_excel(ocr_outputs, excel_path):
                 except Exception as e:
                     print(f"Error adding image for page {page_number}, line {line_number}: {e}")
 
+            '''image_array = entry.get("image")  # this is a NumPy array
+
+            if image_array is not None:
+                try:
+                    # Convert ndarray to PIL Image
+                    if image_array.dtype != np.uint8:
+                        image_array = (image_array * 255).astype(np.uint8)  # normalize if needed
+
+                    pil_image = Image.fromarray(image_array)
+
+                    # Save image to memory as PNG
+                    img_byte_array = io.BytesIO()
+                    pil_image.save(img_byte_array, format='PNG')
+                    img_byte_array.seek(0)
+
+                    # Create Excel image and set position
+                    excel_image = ExcelImage(img_byte_array)
+                    cell_address = f"E{line_number}"  # Column E
+                    excel_image.anchor = cell_address
+                    sheet.add_image(excel_image)
+
+                except Exception as e:
+                    print(f"Error adding image for page {page_number}, line {line_number}: {e}")
+'''
     # Save changes to the workbook
     try:
         workbook.save(excel_path)
