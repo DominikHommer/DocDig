@@ -12,13 +12,16 @@ from modules.column_extractor import ColumnExtractor
 from modules.row_extractor import RowExtractor
 from modules.cell_denoiser import CellDenoiser
 from modules.predictor_dummy import PredictorDummy
+from modules.trocr import TrOCR
+from modules.fuzzy_matching import FuzzyMatching
+
 
 def get_base64_image(path):
     with open(path, "rb") as img_file:
         data = img_file.read()
     return base64.b64encode(data).decode()
 
-image_base64 = get_base64_image("/Users/MeinNotebook/DocDig/src/background.png")
+image_base64 = get_base64_image("C:/Uni/1M. Semester/DocDig/Code/src/background.png")
 
 st.set_page_config(layout="wide")
 
@@ -103,6 +106,8 @@ elif st.session_state.processing[idx]:
     page_pipeline.add_stage(RowExtractor(debug=False))
     page_pipeline.add_stage(CellDenoiser(debug=False))
     page_pipeline.add_stage(PredictorDummy())
+    page_pipeline.add_stage(TrOCR())
+    page_pipeline.add_stage(FuzzyMatching())
 
     result = page_pipeline.run()
 
