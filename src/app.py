@@ -11,7 +11,8 @@ from modules.table_rotator import TableRotator
 from modules.column_extractor import ColumnExtractor
 from modules.row_extractor import RowExtractor
 from modules.cell_denoiser import CellDenoiser
-from modules.predictor_dummy import PredictorDummy
+from modules.cell_formatter import CellFormatter
+from modules.quotation_mark_detector import QuotationMarkDetector
 from modules.trocr import TrOCR
 from modules.fuzzy_matching import FuzzyMatching
 
@@ -80,6 +81,7 @@ all_pages = st.session_state.all_pages
 page_path = all_pages[idx]
 
 if st.session_state.predictions[idx] is None and not st.session_state.processing[idx]:
+    print("In IF\n")
     st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
     st.image(
         page_path,
@@ -93,6 +95,7 @@ if st.session_state.predictions[idx] is None and not st.session_state.processing
         st.rerun()
 
 elif st.session_state.processing[idx]:
+    print("In ELIF\n")
     st.markdown(
         "<div style='text-align:center; font-size: 24px;'>⏳ Seite wird verarbeitet...</div>",
         unsafe_allow_html=True,
@@ -104,26 +107,35 @@ elif st.session_state.processing[idx]:
     page_pipeline.add_stage(TatrExtractor(debug=False))
     page_pipeline.add_stage(ColumnExtractor(debug=False))
     page_pipeline.add_stage(RowExtractor(debug=False))
-    page_pipeline.add_stage(CellDenoiser(debug=False))
-    page_pipeline.add_stage(PredictorDummy())
+    page_pipeline.add_stage(CellDenoiser(debug=True))
+    page_pipeline.add_stage(CellFormatter())
+    page_pipeline.add_stage(QuotationMarkDetector())
     page_pipeline.add_stage(TrOCR())
     page_pipeline.add_stage(FuzzyMatching())
 
     result = page_pipeline.run()
+    #print(f"ResultsLen: {len(result)}\nResultsLen result['columns'] {len(result['columns'])}")
 
     st.session_state.predictions[idx] = result
     st.session_state.processing[idx] = False
     st.rerun()
 
 else:
-    pred = st.session_state.predictions[idx][0]
+    print("In ELSE\n")
+    pred = st.session_state.predictions[idx]
+
+    # Unpack single-page result if needed
+    if isinstance(pred, list) and len(pred) == 1:
+        pred = pred[0]
+
     columns = pred["columns"]
-    rows = list(zip(*columns))  
+    rows = list(zip(*columns))
 
     st.markdown("## 🧾 Erkannte Zellstruktur")
 
 
     for row_idx, row in enumerate(rows):
+        # Display Images
         image_cols = st.columns(len(row))
         for col_idx, cell in enumerate(row):
             with image_cols[col_idx]:
@@ -136,18 +148,22 @@ else:
                 st.image(Image.fromarray(img_uint8), use_container_width=True)
 
         erkannt_cols = st.columns(len(row))
-        for col_idx, _ in enumerate(row):
+
+        # Display recognized text
+        for col_idx, cell in enumerate(row):
             with erkannt_cols[col_idx]:
+                erkannt_text = cell.get("erkannt", "")
                 color = random.choice(["#ffcccc", "#fff3cd", "#d4edda"])  # rot, gelb, grün (light)
                 st.markdown(
                     f"""
                     <div style='background-color:{color}; padding:6px; border-radius:6px; text-align:center;'>
-                        <b>Erkannt:</b> ...
+                        <b>Erkannt:</b> {erkannt_text}
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
 
+        # Input field for correction
         input_cols = st.columns(len(row))
         for col_idx, _ in enumerate(row):
             with input_cols[col_idx]:
@@ -155,8 +171,8 @@ else:
                 st.text_input(
                     "Verbesserung:",
                     key=cell_key,
-                    label_visibility="collapsed",  
-                    placeholder="Edit", 
+                    label_visibility="collapsed",
+                    placeholder="Edit",
                 )
 
     if st.session_state.page_idx + 1 < len(all_pages):

@@ -1,3 +1,4 @@
+from Code.src.modules.quotation_mark_detector import QuotationMarkDetector
 from pipeline.cv_pipeline import CVPipeline
 import os
 
@@ -7,8 +8,11 @@ from modules.table_rotator import TableRotator
 from modules.column_extractor import ColumnExtractor
 from modules.row_extractor import RowExtractor
 from modules.cell_denoiser import CellDenoiser
+from modules.cell_formatter import CellFormatter
+from modules.quotation_mark_detector import QuotationMarkDetector
 from modules.trocr import TrOCR
 from modules.fuzzy_matching import FuzzyMatching
+
 
 input_image_path = os.path.join("data", "input", "scan_1972_CdB_3_20231125160810-OnePage.pdf")
 
@@ -32,6 +36,8 @@ pipeline.add_stage(TatrExtractor(debug=False))
 pipeline.add_stage(ColumnExtractor(debug=True))
 pipeline.add_stage(RowExtractor(debug=True))
 pipeline.add_stage(CellDenoiser(debug=True))
+pipeline.add_stage(CellFormatter())
+pipeline.add_stage(QuotationMarkDetector())
 pipeline.add_stage(TrOCR())
 pipeline.add_stage(FuzzyMatching())
 pipeline.run(input_data=input_image_path)

@@ -6,6 +6,7 @@ from PIL import Image
 import torch
 import os
 import pandas as pd
+import cv2
 
 
 class TrOCR(Module):
@@ -18,61 +19,58 @@ class TrOCR(Module):
         self.output_path = output_path
 
     def get_preconditions(self) -> List[str]:
-        return ['cell-denoiser']
+        return ['quotationmark-detector', 'cell-formatter']
 
     def process(self, data: dict, config: dict) -> List[Dict]:
-        denoised_pages = data['cell-denoiser']
-        print(len(denoised_pages))
-        print(len(denoised_pages[0]))
-        trocr_results = []
-        excel_data = []
 
-        for page_idx, page in enumerate(denoised_pages):
-            print(f"length of page {page_idx}: {len(page)}")
-            page_result = {"columns": []}
-            page_df_columns = []
+        # Pick from valid previous module outputs
+        valid_keys = self.get_preconditions()
+        input_key = next((k for k in valid_keys if k in data), None)
+        if input_key is None:
+            raise ValueError("No valid input found for TrOCR.")
+
+        pages = data[input_key]
+        if isinstance(pages, dict):
+            pages = [pages]
+
+        output = []
+
+        for page_idx, page in enumerate(pages):
+            processed_page = {"columns": []}
 
             for col_idx, column in enumerate(page["columns"]):
-                col_cells = []
-                col_texts = []
+                processed_column = []
 
-                for cell_img in column:
-                    # Convert to PIL and process with TrOCR
-                    pil_image = Image.fromarray(cell_img).convert("RGB")
-                    inputs = self.processor(images=pil_image, return_tensors="pt").to(self.device)
+                if col_idx == 0:
 
-                    with torch.no_grad():
-                        generated_ids = self.model.generate(**inputs)
-                        text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                    for cell in column:
 
-                    # Append result
-                    col_cells.append({
-                        "image": cell_img,
-                        "erkannt": text,
-                        "verbesserung": ""
-                    })
-                    col_texts.append(text)
+                        if cell["skip_ocr"]:
+                            processed_column.append(cell)
 
+                        else: # cell["skip_ocr"] is false
+                            image = cell["image"]
+                            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+                            pil_image = Image.fromarray(image).convert("RGB")
+                            #print(f"Image dtype: {image.dtype}, min: {image.min()}, max: {image.max()}")
+                            #cv2.imshow("Quotation Mark Candidate", image)
+                            #cv2.waitKey(0)  # Press a key to close
+                            #cv2.destroyAllWindows()
 
-                page_result["columns"].append(col_cells)
-                page_df_columns.append(col_texts)
+                            inputs = self.processor(images=pil_image, return_tensors="pt").to(self.device)
 
-            # Build Excel dataframe
-            num_rows = max(len(col) for col in page_df_columns)
-            rows = []
+                            with torch.no_grad():
+                                generated_ids = self.model.generate(**inputs)
+                                text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
-            for i in range(num_rows):
-                row = [col[i] if i < len(col) else "" for col in page_df_columns]
-                rows.append(row)
+                            cell["erkannt"] = text
+                            cell["score"] = 0
 
-            df = pd.DataFrame(rows)
-            excel_data.append(df)
-            trocr_results.append(page_result)
+                            processed_column.append(cell)
+                            print(f"Text erkannt: {text}")
 
-        # Save Excel
-        os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
-        with pd.ExcelWriter(self.output_path, engine='openpyxl') as writer:
-            for i, df in enumerate(excel_data):
-                df.to_excel(writer, sheet_name=f"Page_{i+1}", index=False)
+                processed_page["columns"].append(processed_column)
 
-        return trocr_results
+            output.append(processed_page)
+
+        return output

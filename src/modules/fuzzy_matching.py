@@ -6,53 +6,65 @@ from rapidfuzz import process, fuzz
 
 
 class FuzzyMatching(Module):
-    def __init__(self, class_label_path: str = "./config/class_labels.json", score_threshold: int = 80):
+    def __init__(self, class_label_path: str = "./config/class_indices.json", score_threshold: int = 10):
         super().__init__("fuzzy-corrector")
         self.class_labels = []
         self.score_threshold = score_threshold
 
         if os.path.exists(class_label_path):
             with open(class_label_path, "r", encoding="utf-8") as f:
-                self.class_labels = json.load(f)
+                name_to_idx = json.load(f)
+                # Extract just the class names
+                self.class_labels = list(name_to_idx.keys())
+
 
     def get_preconditions(self) -> List[str]:
-        # Put the model used before her
-        # Todo: Run this module if any model "trocr", "predictor", "dummypredictor", ... has run before
-        return ['trocr']
+        # Accepts output from any detector module with same structure
+        return ['trocr', 'predictor', 'predictor-dummy']
 
     def process(self, data: dict, config: dict) -> List[Dict]:
-        # Dynamically get the key for the actual input module
-        input_key = next(iter(data))
+
+        # Pick from valid previous module outputs
+        valid_keys = self.get_preconditions()
+        input_key = next((k for k in valid_keys if k in data), None)
+        if input_key is None:
+            raise ValueError("No valid input found for fuzzy matching.")
+
         pages = data[input_key]
-        print(len(pages))
-        print(len(pages[0]))
-        corrected_output = []
+        if isinstance(pages, dict):
+            pages = [pages]
+
+        output = []
 
         for page in pages:
-            corrected_page = {"columns": []}
+            processed_page = {"columns": []}
 
-            for column in page["columns"]:
-                corrected_column = []
+            for col_idx, column in enumerate(page["columns"]):  # ✅ now safe, page is a dict
+                processed_column = []
 
-                for cell in column:
-                    text = cell.get("erkannt", "")
-                    best_match, score, _ = process.extractOne(
-                        text,
-                        self.class_labels,
-                        scorer=fuzz.token_sort_ratio
-                    ) if self.class_labels else ("", 0, None)
+                if col_idx == 0:
 
-                    correction = best_match if score >= self.score_threshold else ""
+                    for cell in column:
 
-                    corrected_cell = {
-                        "image": cell["image"],
-                        "erkannt": text,
-                        "verbesserung": correction
-                    }
+                        if cell["skip_ocr"]:
+                            processed_column.append(cell)
 
-                    corrected_column.append(corrected_cell)
+                        else: # cell["skip_ocr"] is false
+                            text = cell["erkannt"]
+                            best_match, score, _ = process.extractOne(text,
+                                                                      self.class_labels,
+                                                                      scorer=fuzz.token_sort_ratio
+                                                                      ) if self.class_labels else ("", 0, None)
 
-                corrected_page["columns"].append(corrected_column)
-            corrected_output.append(corrected_page)
+                            correction = best_match if score >= self.score_threshold else ""
 
-        return corrected_output
+                            cell["text"] = correction
+                            cell["score"] = score
+
+                            processed_column.append(cell)
+
+                processed_page["columns"].append(processed_column)
+
+            output.append(processed_page)
+
+        return output

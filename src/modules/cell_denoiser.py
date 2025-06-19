@@ -66,7 +66,7 @@ class CellDenoiser(Module):
                     if self.debug:
                         cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{p_i}_column_{col_nr}_row_{row_nr}.jpg", output)
 
-                    page_data["columns"][col_nr].append(img)
+                    page_data["columns"][col_nr].append(output) # img for the original image, output for the denoised image
 
             result.append(page_data)
 

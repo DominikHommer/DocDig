@@ -51,11 +51,11 @@ class Pipeline:
         }
 
         return True
-    
+
     def _check_condition(self, module: Module):
-        for condition in module.get_preconditions():
-            if self.data.get(condition, None) is None:
-                raise Exception(f"Precondition of ${module.module_key} not fulfilled")
+        preconditions = module.get_preconditions()
+        if not any(self.data.get(cond) is not None for cond in preconditions):
+            raise Exception(f"Preconditions for {module.module_key} not fulfilled: need one of {preconditions}")
 
     def run(self, input_data = None):
         if not self._setup_environment():
