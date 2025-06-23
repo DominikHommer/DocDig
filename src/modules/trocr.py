@@ -69,6 +69,9 @@ class TrOCR(Module):
                             processed_column.append(cell)
                             print(f"Text erkannt: {text}")
 
+                else: # For other columns
+                    processed_column.extend(column)
+
                 processed_page["columns"].append(processed_column)
 
             output.append(processed_page)

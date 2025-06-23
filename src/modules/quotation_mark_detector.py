@@ -49,7 +49,9 @@ class QuotationMarkDetector(Module):
                     for cell in column:
                         image = cell["image"]
                         is_quote = self.detect_quotation_marks(image, self.threshold)
-                        print(is_quote)
+
+                        if is_quote:
+                            print("Detected QuotationMark")
 
                         # Update recognized fields
                         cell["erkannt"] = '"' if is_quote else cell.get("erkannt", "")
@@ -57,6 +59,9 @@ class QuotationMarkDetector(Module):
                         cell["skip_ocr"] = is_quote
 
                         processed_column.append(cell)
+
+                else: # For other columns
+                    processed_column.extend(column)
 
                 processed_page["columns"].append(processed_column)
 

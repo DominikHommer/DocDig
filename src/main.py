@@ -12,6 +12,7 @@ from modules.cell_formatter import CellFormatter
 from modules.quotation_mark_detector import QuotationMarkDetector
 from modules.trocr import TrOCR
 from modules.fuzzy_matching import FuzzyMatching
+from modules.predictor_dummy import PredictorDummy
 
 
 input_image_path = os.path.join("data", "input", "scan_1972_CdB_3_20231125160810-OnePage.pdf")

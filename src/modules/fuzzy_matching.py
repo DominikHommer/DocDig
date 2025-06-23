@@ -39,7 +39,7 @@ class FuzzyMatching(Module):
         for page in pages:
             processed_page = {"columns": []}
 
-            for col_idx, column in enumerate(page["columns"]):  # ✅ now safe, page is a dict
+            for col_idx, column in enumerate(page["columns"]):
                 processed_column = []
 
                 if col_idx == 0:
@@ -58,10 +58,13 @@ class FuzzyMatching(Module):
 
                             correction = best_match if score >= self.score_threshold else ""
 
-                            cell["text"] = correction
+                            cell["erkannt"] = correction
                             cell["score"] = score
 
                             processed_column.append(cell)
+
+                else: # For other columns
+                    processed_column.extend(column)
 
                 processed_page["columns"].append(processed_column)
 

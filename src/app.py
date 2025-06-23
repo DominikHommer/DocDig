@@ -1,4 +1,5 @@
 import os
+os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
 import streamlit as st
 from PIL import Image
 import random
@@ -15,6 +16,7 @@ from modules.cell_formatter import CellFormatter
 from modules.quotation_mark_detector import QuotationMarkDetector
 from modules.trocr import TrOCR
 from modules.fuzzy_matching import FuzzyMatching
+from modules.predictor_dummy import PredictorDummy
 
 
 def get_base64_image(path):
@@ -116,12 +118,12 @@ elif st.session_state.processing[idx]:
     result = page_pipeline.run()
     #print(f"ResultsLen: {len(result)}\nResultsLen result['columns'] {len(result['columns'])}")
 
+
     st.session_state.predictions[idx] = result
     st.session_state.processing[idx] = False
     st.rerun()
 
 else:
-    print("In ELSE\n")
     pred = st.session_state.predictions[idx]
 
     # Unpack single-page result if needed
@@ -135,6 +137,7 @@ else:
 
 
     for row_idx, row in enumerate(rows):
+
         # Display Images
         image_cols = st.columns(len(row))
         for col_idx, cell in enumerate(row):
@@ -174,6 +177,8 @@ else:
                     label_visibility="collapsed",
                     placeholder="Edit",
                 )
+
+    print(f"Done printing!")
 
     if st.session_state.page_idx + 1 < len(all_pages):
         if st.button("➡️ Nächste Seite"):
