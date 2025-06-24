@@ -7,10 +7,10 @@ class CellFormatter(Module):
         super().__init__("cell-formatter")
 
     def get_preconditions(self) -> List[str]:
-        return ['cell-denoiser']
+        return ['spezies-spalten-markierer']
 
     def process(self, data: dict, config: dict) -> List[Dict]:
-        pages = data["cell-denoiser"]
+        pages = data["spezies-spalten-markierer"]
         output = []
 
         for page in pages:
@@ -19,12 +19,13 @@ class CellFormatter(Module):
             for column in page["columns"]:
                 formatted_column = []
 
-                for cell_image in column:
-
+                for cell_image in column["cells"]:
                     # Interpolate, and normalize image
-                    image = (cell_image - cell_image.min()) / (cell_image.max() - cell_image.min())
-                    image = 1.0 - image
-                    image = (image * 255).astype(np.uint8)
+                    #image = (cell_image - cell_image.min()) / (cell_image.max() - cell_image.min())
+                    #image = 1.0 - image
+                    #image = (image * 255).astype(np.uint8)
+
+                    image = cell_image if isinstance(cell_image, np.ndarray) else cell_image["image"]
 
                     formatted_column.append({
                         "image": image,
@@ -34,7 +35,10 @@ class CellFormatter(Module):
                         "skip_ocr": False
                     })
 
-                formatted_page["columns"].append(formatted_column)
+                formatted_page["columns"].append({
+                    "cells": formatted_column,
+                    "is_spezies_spalte": column.get("is_spezies_spalte", False)
+                })
 
             output.append(formatted_page)
 

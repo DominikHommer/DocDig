@@ -4,7 +4,6 @@ import os
 import json
 from rapidfuzz import process, fuzz
 
-
 class FuzzyMatching(Module):
     def __init__(self, class_label_path: str = "./config/class_indices.json", score_threshold: int = 10):
         super().__init__("fuzzy-corrector")
@@ -17,16 +16,14 @@ class FuzzyMatching(Module):
                 # Extract just the class names
                 self.class_labels = list(name_to_idx.keys())
 
-
     def get_preconditions(self) -> List[str]:
         # Accepts output from any detector module with same structure
         return ['trocr', 'predictor', 'predictor-dummy']
 
     def process(self, data: dict, config: dict) -> List[Dict]:
 
-        # Pick from valid previous module outputs
         valid_keys = self.get_preconditions()
-        input_key = next((k for k in valid_keys if k in data), None)
+        input_key = next((k for k in data if k in valid_keys), None)
         if input_key is None:
             raise ValueError("No valid input found for fuzzy matching.")
 
@@ -39,35 +36,39 @@ class FuzzyMatching(Module):
         for page in pages:
             processed_page = {"columns": []}
 
-            for col_idx, column in enumerate(page["columns"]):
-                processed_column = []
+            for column in page["columns"]:
+                is_spezies_spalte = column.get("is_spezies_spalte", False)
+                cells = column.get("cells", [])
+                processed_cells = []
 
-                if col_idx == 0:
+                if not is_spezies_spalte:
+                    # Spalte nicht bearbeiten, einfach übernehmen
+                    processed_page["columns"].append(column)
+                    continue
 
-                    for cell in column:
+                for cell in cells:
+                    if cell.get("skip_ocr", False):
+                        print("Skipped due to questionmark fuzzy")
+                        processed_cells.append(cell)
+                    else:
+                        text = cell.get("erkannt", "")
+                        best_match, score, _ = process.extractOne(
+                            text,
+                            self.class_labels,
+                            scorer=fuzz.token_sort_ratio
+                        ) if self.class_labels else ("", 0, None)
 
-                        if cell["skip_ocr"]:
-                            processed_column.append(cell)
+                        correction = best_match if score >= self.score_threshold else ""
+                        cell["erkannt"] = correction
+                        cell["score"] = score
 
-                        else: # cell["skip_ocr"] is false
-                            text = cell["erkannt"]
-                            best_match, score, _ = process.extractOne(text,
-                                                                      self.class_labels,
-                                                                      scorer=fuzz.token_sort_ratio
-                                                                      ) if self.class_labels else ("", 0, None)
+                        processed_cells.append(cell)
 
-                            correction = best_match if score >= self.score_threshold else ""
-
-                            cell["erkannt"] = correction
-                            cell["score"] = score
-
-                            processed_column.append(cell)
-
-                else: # For other columns
-                    processed_column.extend(column)
-
-                processed_page["columns"].append(processed_column)
+                processed_page["columns"].append({
+                    "cells": processed_cells,
+                    "is_spezies_spalte": True
+                })
 
             output.append(processed_page)
-
+    
         return output

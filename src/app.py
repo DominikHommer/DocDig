@@ -17,6 +17,7 @@ from modules.quotation_mark_detector import QuotationMarkDetector
 from modules.trocr import TrOCR
 from modules.fuzzy_matching import FuzzyMatching
 from modules.predictor_dummy import PredictorDummy
+from modules.detect_species_column import DetectSpeciesColumn
 
 
 def get_base64_image(path):
@@ -24,7 +25,7 @@ def get_base64_image(path):
         data = img_file.read()
     return base64.b64encode(data).decode()
 
-image_base64 = get_base64_image("C:/Uni/1M. Semester/DocDig/Code/src/background.png")
+image_base64 = get_base64_image("src/background.png")
 
 st.set_page_config(layout="wide")
 
@@ -109,7 +110,8 @@ elif st.session_state.processing[idx]:
     page_pipeline.add_stage(TatrExtractor(debug=False))
     page_pipeline.add_stage(ColumnExtractor(debug=False))
     page_pipeline.add_stage(RowExtractor(debug=False))
-    page_pipeline.add_stage(CellDenoiser(debug=True))
+    page_pipeline.add_stage(DetectSpeciesColumn())
+    #page_pipeline.add_stage(CellDenoiser(debug=True))
     page_pipeline.add_stage(CellFormatter())
     page_pipeline.add_stage(QuotationMarkDetector())
     page_pipeline.add_stage(TrOCR())
@@ -117,6 +119,7 @@ elif st.session_state.processing[idx]:
 
     result = page_pipeline.run()
     #print(f"ResultsLen: {len(result)}\nResultsLen result['columns'] {len(result['columns'])}")
+    
 
 
     st.session_state.predictions[idx] = result
@@ -131,8 +134,9 @@ else:
         pred = pred[0]
 
     columns = pred["columns"]
-    rows = list(zip(*columns))
-
+    cells_only = [col["cells"] for col in columns]
+    rows = list(zip(*cells_only))
+    
     st.markdown("## 🧾 Erkannte Zellstruktur")
 
 

@@ -8,13 +8,12 @@ import os
 import pandas as pd
 import cv2
 
-
 class TrOCR(Module):
     def __init__(self, model_name="microsoft/trocr-base-stage1", output_path="data/output/trocr_output.xlsx"):
         super().__init__("trocr")
         self.processor = TrOCRProcessor.from_pretrained(model_name)
         self.model = VisionEncoderDecoderModel.from_pretrained(model_name)
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "mps"
         self.model.to(self.device)
         self.output_path = output_path
 
@@ -22,8 +21,6 @@ class TrOCR(Module):
         return ['quotationmark-detector', 'cell-formatter']
 
     def process(self, data: dict, config: dict) -> List[Dict]:
-
-        # Pick from valid previous module outputs
         valid_keys = self.get_preconditions()
         input_key = next((k for k in valid_keys if k in data), None)
         if input_key is None:
@@ -39,41 +36,50 @@ class TrOCR(Module):
             processed_page = {"columns": []}
 
             for col_idx, column in enumerate(page["columns"]):
+                is_spezies_spalte = column.get("is_spezies_spalte", False)
+                cells = column["cells"]
                 processed_column = []
 
-                if col_idx == 0:
+                # Speichere Beispielbild für Debug-Zwecke
+                if cells and isinstance(cells[0], dict) and "image" in cells[0]:
+                    cv2.imwrite(f"test_png_{col_idx}.png", cells[0]["image"])
 
-                    for cell in column:
+                if not is_spezies_spalte:
+                    print(f"Skipping column {col_idx} – not marked as 'spezies' column.")
+                    processed_page["columns"].append(column)
+                    continue
 
-                        if cell["skip_ocr"]:
-                            processed_column.append(cell)
+                for cell in cells:
+                    if cell["skip_ocr"]:
+                        processed_column.append(cell)
+                        print("Skipped due to quotationmark")
+                    else:
+                        image = cell["image"]
+                        image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+                        pil_image = Image.fromarray(image).convert("RGB")
 
-                        else: # cell["skip_ocr"] is false
-                            image = cell["image"]
-                            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-                            pil_image = Image.fromarray(image).convert("RGB")
-                            #print(f"Image dtype: {image.dtype}, min: {image.min()}, max: {image.max()}")
-                            #cv2.imshow("Quotation Mark Candidate", image)
-                            #cv2.waitKey(0)  # Press a key to close
-                            #cv2.destroyAllWindows()
+                        #print(f"Image dtype: {image.dtype}, min: {image.min()}, max: {image.max()}")
+                        #cv2.imshow("Quotation Mark Candidate", image)
+                        #cv2.waitKey(0)
+                        #cv2.destroyAllWindows()
 
-                            inputs = self.processor(images=pil_image, return_tensors="pt").to(self.device)
+                        inputs = self.processor(images=pil_image, return_tensors="pt").to(self.device)
 
-                            with torch.no_grad():
-                                generated_ids = self.model.generate(**inputs)
-                                text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                        with torch.no_grad():
+                            generated_ids = self.model.generate(**inputs)
+                            text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
-                            cell["erkannt"] = text
-                            cell["score"] = 0
+                        cell["erkannt"] = text
+                        cell["score"] = 0
+                        processed_column.append(cell)
+                        print(f"Text erkannt: {text}")
 
-                            processed_column.append(cell)
-                            print(f"Text erkannt: {text}")
-
-                else: # For other columns
-                    processed_column.extend(column)
-
-                processed_page["columns"].append(processed_column)
+                processed_page["columns"].append({
+                    "cells": processed_column,
+                    "is_spezies_spalte": True
+                })
 
             output.append(processed_page)
 
         return output
+

@@ -69,5 +69,5 @@ class CellDenoiser(Module):
                     page_data["columns"][col_nr].append(output) # img for the original image, output for the denoised image
 
             result.append(page_data)
-
+        
         return result
