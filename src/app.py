@@ -11,13 +11,15 @@ from modules.tatr_extraction import TatrExtractor
 from modules.table_rotator import TableRotator
 from modules.column_extractor import ColumnExtractor
 from modules.row_extractor import RowExtractor
+from modules.detect_columns import DetectColumns
+from modules.reorder_columns import ReorderColumns
 from modules.cell_denoiser import CellDenoiser
 from modules.cell_formatter import CellFormatter
 from modules.quotation_mark_detector import QuotationMarkDetector
 from modules.trocr import TrOCR
-from modules.fuzzy_matching import FuzzyMatching
+from modules.fuzzy_matching import FuzzyMatchingBirdNames
 from modules.predictor_dummy import PredictorDummy
-from modules.detect_species_column import DetectSpeciesColumn
+
 
 
 def get_base64_image(path):
@@ -84,7 +86,7 @@ all_pages = st.session_state.all_pages
 page_path = all_pages[idx]
 
 if st.session_state.predictions[idx] is None and not st.session_state.processing[idx]:
-    print("In IF\n")
+
     st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
     st.image(
         page_path,
@@ -98,7 +100,7 @@ if st.session_state.predictions[idx] is None and not st.session_state.processing
         st.rerun()
 
 elif st.session_state.processing[idx]:
-    print("In ELIF\n")
+
     st.markdown(
         "<div style='text-align:center; font-size: 24px;'>⏳ Seite wird verarbeitet...</div>",
         unsafe_allow_html=True,
@@ -110,12 +112,14 @@ elif st.session_state.processing[idx]:
     page_pipeline.add_stage(TatrExtractor(debug=False))
     page_pipeline.add_stage(ColumnExtractor(debug=False))
     page_pipeline.add_stage(RowExtractor(debug=False))
-    page_pipeline.add_stage(DetectSpeciesColumn())
-    #page_pipeline.add_stage(CellDenoiser(debug=True))
+    page_pipeline.add_stage(DetectColumns())
+    page_pipeline.add_stage(ReorderColumns())
+    page_pipeline.add_stage(CellDenoiser(debug=True))
+
     page_pipeline.add_stage(CellFormatter())
     page_pipeline.add_stage(QuotationMarkDetector())
     page_pipeline.add_stage(TrOCR())
-    page_pipeline.add_stage(FuzzyMatching())
+    page_pipeline.add_stage(FuzzyMatchingBirdNames())
 
     result = page_pipeline.run()
     #print(f"ResultsLen: {len(result)}\nResultsLen result['columns'] {len(result['columns'])}")
@@ -136,17 +140,18 @@ else:
     columns = pred["columns"]
     cells_only = [col["cells"] for col in columns]
     rows = list(zip(*cells_only))
-    
+
     st.markdown("## 🧾 Erkannte Zellstruktur")
 
-
-    for row_idx, row in enumerate(rows):
-
-        # Display Images
-        image_cols = st.columns(len(row))
-        for col_idx, cell in enumerate(row):
-            with image_cols[col_idx]:
-                img_array = cell["image"]
+    # ---- HEADER (row 0) ----
+    header_row = rows[0]
+    header_cols = st.columns(len(header_row))
+    for col_idx, cell in enumerate(header_row):
+        with header_cols[col_idx]:
+            img_array = cell["image"]
+            if img_array is None:
+                st.markdown('<span style="color:red">Cell Not Detected</span>', unsafe_allow_html=True)
+            else:
                 img_uint8 = (
                     (img_array * 255).astype("uint8")
                     if img_array.max() <= 1
@@ -154,16 +159,42 @@ else:
                 )
                 st.image(Image.fromarray(img_uint8), use_container_width=True)
 
+    # ---- OTHER ROWS (starting from row 1) ----
+    for row_idx, row in enumerate(rows[1:], start=1):
+
+        # Display Images
+        image_cols = st.columns(len(row))
+        for col_idx, cell in enumerate(row):
+            with image_cols[col_idx]:
+                img_array = cell["image"]
+                if img_array is None:
+                    st.markdown('<span style="color:red">Cell Not Detected</span>', unsafe_allow_html=True)
+                else:
+                    img_uint8 = (
+                        (img_array * 255).astype("uint8")
+                        if img_array.max() <= 1
+                        else img_array.astype("uint8")
+                    )
+                    st.image(Image.fromarray(img_uint8), use_container_width=True)
+
         erkannt_cols = st.columns(len(row))
 
         # Display recognized text
         for col_idx, cell in enumerate(row):
             with erkannt_cols[col_idx]:
                 erkannt_text = cell.get("erkannt", "")
-                color = random.choice(["#ffcccc", "#fff3cd", "#d4edda"])  # rot, gelb, grün (light)
+                score = cell.get("score", -1)
+
+                if score >= 90:
+                    color = "#d4edda"  # green
+                elif score >= 50:
+                    color = "#fff3cd"  # yellow
+                else:
+                    color = "#f8d7da"  # red
+
                 st.markdown(
                     f"""
-                    <div style='background-color:{color}; padding:6px; border-radius:6px; text-align:center;'>
+                    <div style='background-color:{color}; color: black; padding:6px; border-radius:6px; text-align:center;'>
                         <b>Erkannt:</b> {erkannt_text}
                     </div>
                     """,

@@ -13,7 +13,7 @@ class TrOCR(Module):
         super().__init__("trocr")
         self.processor = TrOCRProcessor.from_pretrained(model_name)
         self.model = VisionEncoderDecoderModel.from_pretrained(model_name)
-        self.device = "cuda" if torch.cuda.is_available() else "mps"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model.to(self.device)
         self.output_path = output_path
 
@@ -36,23 +36,29 @@ class TrOCR(Module):
             processed_page = {"columns": []}
 
             for col_idx, column in enumerate(page["columns"]):
-                is_spezies_spalte = column.get("is_spezies_spalte", False)
+                is_species_column = column.get("is_species_column", False)
+                is_age_column = column.get("is_age_column", False)
                 cells = column["cells"]
                 processed_column = []
 
                 # Speichere Beispielbild für Debug-Zwecke
-                if cells and isinstance(cells[0], dict) and "image" in cells[0]:
+                if cells and isinstance(cells[0], dict) and "image" in cells[0] and cells[0]["image"] is not None:
                     cv2.imwrite(f"test_png_{col_idx}.png", cells[0]["image"])
 
-                if not is_spezies_spalte:
-                    print(f"Skipping column {col_idx} – not marked as 'spezies' column.")
+                if not (is_species_column or is_age_column):
+                    print(f"Skipping OCR for column {col_idx} – not marked as 'species' or 'age' column.")
                     processed_page["columns"].append(column)
                     continue
 
-                for cell in cells:
+                for cell_idx, cell in enumerate(cells):
+
+                    if cell_idx == 0:  # if header
+                        processed_column.append(cell)
+                        continue
+
                     if cell["skip_ocr"]:
                         processed_column.append(cell)
-                        print("Skipped due to quotationmark")
+                        print("OCR skipped due to quotationmark")
                     else:
                         image = cell["image"]
                         image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
@@ -76,7 +82,9 @@ class TrOCR(Module):
 
                 processed_page["columns"].append({
                     "cells": processed_column,
-                    "is_spezies_spalte": True
+                    "is_batch_column": column.get("is_batch_column", False),
+                    "is_species_column": is_species_column,
+                    "is_age_column": is_age_column
                 })
 
             output.append(processed_page)

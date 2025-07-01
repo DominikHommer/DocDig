@@ -7,10 +7,10 @@ class CellFormatter(Module):
         super().__init__("cell-formatter")
 
     def get_preconditions(self) -> List[str]:
-        return ['spezies-spalten-markierer']
+        return ['cell-denoiser']
 
     def process(self, data: dict, config: dict) -> List[Dict]:
-        pages = data["spezies-spalten-markierer"]
+        pages = data["cell-denoiser"]
         output = []
 
         for page in pages:
@@ -20,12 +20,24 @@ class CellFormatter(Module):
                 formatted_column = []
 
                 for cell_image in column["cells"]:
-                    # Interpolate, and normalize image
-                    #image = (cell_image - cell_image.min()) / (cell_image.max() - cell_image.min())
-                    #image = 1.0 - image
-                    #image = (image * 255).astype(np.uint8)
 
                     image = cell_image if isinstance(cell_image, np.ndarray) else cell_image["image"]
+
+                    if image is None:
+                        formatted_column.append({
+                            "image": None,
+                            "erkannt": "",
+                            "score": -1,
+                            "verbesserung": "",
+                            "skip_ocr": False
+                        })
+                        continue
+
+                    # Interpolate, and normalize image
+                    image = (image - image.min()) / (image.max() - image.min())
+                    image = 1.0 - image
+                    image = (image * 255).astype(np.uint8)
+
 
                     formatted_column.append({
                         "image": image,
@@ -37,9 +49,13 @@ class CellFormatter(Module):
 
                 formatted_page["columns"].append({
                     "cells": formatted_column,
-                    "is_spezies_spalte": column.get("is_spezies_spalte", False)
+                    "is_batch_column": column.get("is_batch_column", False),
+                    "is_species_column": column.get("is_species_column", False),
+                    "is_age_column": column.get("is_age_column", False)
                 })
 
             output.append(formatted_page)
+
+        print("\nAll Cells Formatted!\n")
 
         return output

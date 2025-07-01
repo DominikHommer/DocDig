@@ -34,40 +34,53 @@ class CellDenoiser(Module):
             os.makedirs(self.debug_folder, exist_ok=True)
 
     def get_preconditions(self) -> list[str]:
-        return ['row-extractor']
+        return ['column-reorderer']
     
     def process(self, data: dict, config: dict) -> list:
-        pages: list = data.get('row-extractor')
+        pages: list = data.get('column-reorderer')
 
         model = load_model(config["denoise"]["model"], custom_objects={"weighted_mse": weighted_mse})
     
         result = []
         for p_i, page in enumerate(pages):
-            page_data: CellDenoiserResult = {
-                "columns": [list() for _ in range(len(page['columns']))]
-            }
+            page_data = {"columns": []}
 
             for col_nr, col in enumerate(page["columns"]):
-                if len(col) == 0:
-                    page_data["columns"][col_nr] = []
-                    
-                    continue
+                denoised_cells = []
 
-                for row_nr, img in enumerate(col):
+                for row_nr, cell in enumerate(col["cells"]):
+                    img = cell["image"]
+                    if img is None:
+                        denoised_cells.append(cell)
+                        continue
+
                     o_h, o_w = img.shape
                     img_resized = cv2.resize(img, (384, 80))
                     img_resized = np.expand_dims(img_resized, axis=-1)
                     img_resized = np.expand_dims(img_resized, axis=0)
 
+                    # Predict denoised image
                     output = model.predict(cv2.bitwise_not(img_resized))
                     output = np.squeeze(output)
                     output = cv2.resize(output, (o_w, o_h))
 
                     if self.debug:
-                        cv2.imwrite(f"{os.path.dirname(self.debug_folder)}/page_{p_i}_column_{col_nr}_row_{row_nr}.jpg", output)
+                        debug_path = os.path.join(self.debug_folder, f"page_{p_i}_column_{col_nr}_row_{row_nr}.jpg")
+                        cv2.imwrite(debug_path, output)
 
-                    page_data["columns"][col_nr].append(output) # img for the original image, output for the denoised image
+                    # Save denoised image back into the cell
+                    cell["image"] = output
+                    denoised_cells.append(cell)
+
+                # Append column with metadata and denoised cells
+                page_data["columns"].append({
+                    "cells": denoised_cells,
+                    "is_batch_column": col.get("is_batch_column", False),
+                    "is_species_column": col.get("is_species_column", False),
+                    "is_age_column": col.get("is_age_column", False)
+                })
 
             result.append(page_data)
-        
+
+        print("\nAll Cells denoised!\n")
         return result

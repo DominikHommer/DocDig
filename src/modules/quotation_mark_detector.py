@@ -17,9 +17,17 @@ class QuotationMarkDetector(Module):
         #image = 1.0 - image
         #image = (image * 255).astype(np.uint8)
 
+        # Debug outputAdd commentMore actions
+        #print(f"Image dtype: {image.dtype}, min: {image.min()}, max: {image.max()}")
+        #cv2.imshow("Quotation Mark Candidate", image)
+        #cv2.waitKey(0)  # Press a key to close
+        #cv2.destroyAllWindows()
+
         non_white_pixels = np.sum(image < 250)  # allow small tolerance
         total_pixels = image.shape[0] * image.shape[1]
         relative_non_white = non_white_pixels / total_pixels
+
+        #print(f" NonWhite: {non_white_pixels}, relative: {relative_non_white}")
 
         return relative_non_white < relative_non_white_threshold
 
@@ -35,14 +43,19 @@ class QuotationMarkDetector(Module):
 
             for column in page["columns"]:
                 cells = column["cells"]
-                is_spezies_spalte = column.get("is_spezies_spalte", False)
+                is_species_column = column.get("is_species_column", False)
                 processed_cells = []
 
-                if not is_spezies_spalte:
+                if not is_species_column:
                     processed_page["columns"].append(column)
                     continue
 
-                for cell in cells:
+                for cell_idx, cell in enumerate(cells):
+
+                    if cell_idx == 0: # if header
+                        processed_cells.append(cell)
+                        continue
+
                     image = cell["image"]
                     is_quote = self.detect_quotation_marks(image, self.threshold)
 
@@ -57,9 +70,12 @@ class QuotationMarkDetector(Module):
 
                 processed_page["columns"].append({
                     "cells": processed_cells,
-                    "is_spezies_spalte": True
+                    "is_batch_column": column.get("is_batch_column", False),
+                    "is_species_column": is_species_column,
+                    "is_age_column": column.get("is_age_column", False)
                 })
 
             output.append(processed_page)
 
+        print("\nQuotationmark-Detector finished!\n")
         return output
