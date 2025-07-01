@@ -43,7 +43,7 @@ class TrOCR(Module):
                 if cells and isinstance(cells[0], dict) and "image" in cells[0] and cells[0]["image"] is not None:
                     cv2.imwrite(f"test_png_{col_idx}.png", cells[0]["image"])
 
-                if not (col_idx == 1 or col_idx == 3):
+                if not (col_idx == 1 or col_idx == 3 or col_idx == 4 or col_idx == 5):
                     print(f"Skipping OCR for column {col_idx}.")
                     processed_page["columns"].append(column)
                     continue

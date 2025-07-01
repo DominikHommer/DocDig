@@ -18,6 +18,7 @@ from modules.cell_formatter import CellFormatter
 from modules.quotation_mark_detector import QuotationMarkDetector
 from modules.trocr import TrOCR
 from modules.fuzzy_matching import FuzzyMatchingBirdNames
+from modules.fuzzy_matching import FuzzyMatchingAge
 from modules.predictor_dummy import PredictorDummy
 
 
@@ -120,6 +121,7 @@ elif st.session_state.processing[idx]:
     page_pipeline.add_stage(QuotationMarkDetector())
     page_pipeline.add_stage(TrOCR())
     page_pipeline.add_stage(FuzzyMatchingBirdNames())
+    page_pipeline.add_stage(FuzzyMatchingAge())
 
     result = page_pipeline.run()
     #print(f"ResultsLen: {len(result)}\nResultsLen result['columns'] {len(result['columns'])}")

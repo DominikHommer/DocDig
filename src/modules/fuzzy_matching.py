@@ -6,7 +6,7 @@ from rapidfuzz import process, fuzz
 
 class FuzzyMatchingBirdNames(Module):
     def __init__(self, class_label_path: str = "./config/class_indices.json", score_threshold: int = 10):
-        super().__init__("fuzzy-corrector")
+        super().__init__("fuzzy-corrector-Species")
         self.class_labels = []
         self.score_threshold = score_threshold
 
@@ -82,8 +82,8 @@ class FuzzyMatchingBirdNames(Module):
 
 
 class FuzzyMatchingAge(Module):
-    def __init__(self, class_label_path: str = "./config/class_indices.json", score_threshold: int = 10):
-        super().__init__("fuzzy-corrector")
+    def __init__(self, class_label_path: str = "./config/age_classes.json", score_threshold: int = 10):
+        super().__init__("fuzzy-corrector-Age")
         self.class_labels = []
         self.score_threshold = score_threshold
 
@@ -95,7 +95,7 @@ class FuzzyMatchingAge(Module):
 
     def get_preconditions(self) -> List[str]:
         # Accepts output from any detector module with same structure
-        return ['trocr', 'predictor', 'predictor-dummy']
+        return ['trocr', 'predictor', 'predictor-dummy', 'fuzzy-corrector-species']
 
     def process(self, data: dict, config: dict) -> List[Dict]:
 
@@ -117,7 +117,7 @@ class FuzzyMatchingAge(Module):
                 cells = column.get("cells", [])
                 processed_cells = []
 
-                if not col_idx == 1:
+                if not col_idx == 3:
                     # Spalte nicht bearbeiten, einfach übernehmen
                     processed_page["columns"].append(column)
                     continue
