@@ -36,8 +36,6 @@ class TrOCR(Module):
             processed_page = {"columns": []}
 
             for col_idx, column in enumerate(page["columns"]):
-                is_species_column = column.get("is_species_column", False)
-                is_age_column = column.get("is_age_column", False)
                 cells = column["cells"]
                 processed_column = []
 
@@ -45,8 +43,8 @@ class TrOCR(Module):
                 if cells and isinstance(cells[0], dict) and "image" in cells[0] and cells[0]["image"] is not None:
                     cv2.imwrite(f"test_png_{col_idx}.png", cells[0]["image"])
 
-                if not (is_species_column or is_age_column):
-                    print(f"Skipping OCR for column {col_idx} – not marked as 'species' or 'age' column.")
+                if not (col_idx == 1 or col_idx == 3):
+                    print(f"Skipping OCR for column {col_idx}.")
                     processed_page["columns"].append(column)
                     continue
 
@@ -83,11 +81,17 @@ class TrOCR(Module):
                 processed_page["columns"].append({
                     "cells": processed_column,
                     "is_batch_column": column.get("is_batch_column", False),
-                    "is_species_column": is_species_column,
-                    "is_age_column": is_age_column
+                    "is_species_column": column.get("is_species_column", False),
+                    "is_sexe_column": column.get("is_sexe_column", False),
+                    "is_age_column": column.get("is_age_column", False),
+                    "is_jour-mois_column": column.get("is_jour-mois_column", False),
+                    "is_heure_column": column.get("is_heure_column", False),
+                    "is_alle_column": column.get("is_alle_column", False),
+                    "is_poids_column": column.get("is_poids_column", False)
                 })
 
             output.append(processed_page)
 
+        print("\nOCR finished!\n")
         return output
 

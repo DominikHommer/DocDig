@@ -213,7 +213,7 @@ else:
                     placeholder="Edit",
                 )
 
-    print(f"Done printing!")
+    print(f"\nDone printing!\n")
 
     if st.session_state.page_idx + 1 < len(all_pages):
         if st.button("➡️ Nächste Seite"):

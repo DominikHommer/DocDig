@@ -16,7 +16,10 @@ class ReorderColumns(Module):
             "is_jour-mois_column",
             "is_heure_column",
             "is_alle_column",
-            "is_poids_column"
+            "is_poids_column",
+            "empty_column1",
+            "empty_column2",
+            "laisser-en-blanc_column",
         ]
 
     def get_preconditions(self) -> List[str]:
@@ -99,22 +102,19 @@ class ReorderColumns(Module):
                 role = self._get_column_role(col)
                 if role and role not in role_to_index:
                     role_to_index[role] = i
+                else:
+                    role = self.expected_roles[i]
+                    role_to_index[role] = i
+
 
             # Reorder: build new list of columns in correct role order
             reordered = []
-            used_indexes = set()
             for expected_role in self.expected_roles:
                 idx = role_to_index.get(expected_role)
-                print(f"Expected_role: {expected_role}, idx: {idx}")
-                if idx is not None:
-                    reordered.append(columns[idx])
-                    used_indexes.add(idx)
-
-            # Add remaining columns (unlabeled or unknown) at the end
-            for i, col in enumerate(columns):
-                if i not in used_indexes:
-                    reordered.append(col)
+                print(f"Updated Column: {expected_role}, at idx: {idx}")
+                reordered.append(columns[idx])
 
             output.append({"columns": reordered})
 
+        print("\nColumns Reordered!\n")
         return output

@@ -51,7 +51,12 @@ class CellFormatter(Module):
                     "cells": formatted_column,
                     "is_batch_column": column.get("is_batch_column", False),
                     "is_species_column": column.get("is_species_column", False),
-                    "is_age_column": column.get("is_age_column", False)
+                    "is_sexe_column": column.get("is_sexe_column", False),
+                    "is_age_column": column.get("is_age_column", False),
+                    "is_jour-mois_column": column.get("is_jour-mois_column", False),
+                    "is_heure_column": column.get("is_heure_column", False),
+                    "is_alle_column": column.get("is_alle_column", False),
+                    "is_poids_column": column.get("is_poids_column", False)
                 })
 
             output.append(formatted_page)

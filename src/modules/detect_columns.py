@@ -142,5 +142,6 @@ class DetectColumns(Module):
                 })
 
             output.append(processed_page)
+            print("\nColumn Detector finished!\n")
 
         return output

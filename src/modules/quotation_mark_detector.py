@@ -41,12 +41,12 @@ class QuotationMarkDetector(Module):
         for page in pages:
             processed_page = {"columns": []}
 
-            for column in page["columns"]:
+            for col_idx, column in enumerate(page["columns"]):
                 cells = column["cells"]
-                is_species_column = column.get("is_species_column", False)
+
                 processed_cells = []
 
-                if not is_species_column:
+                if not col_idx == 1:
                     processed_page["columns"].append(column)
                     continue
 
@@ -71,8 +71,13 @@ class QuotationMarkDetector(Module):
                 processed_page["columns"].append({
                     "cells": processed_cells,
                     "is_batch_column": column.get("is_batch_column", False),
-                    "is_species_column": is_species_column,
-                    "is_age_column": column.get("is_age_column", False)
+                    "is_species_column": column.get("is_species_column", False),
+                    "is_sexe_column": column.get("is_sexe_column", False),
+                    "is_age_column": column.get("is_age_column", False),
+                    "is_jour-mois_column": column.get("is_jour-mois_column", False),
+                    "is_heure_column": column.get("is_heure_column", False),
+                    "is_alle_column": column.get("is_alle_column", False),
+                    "is_poids_column": column.get("is_poids_column", False)
                 })
 
             output.append(processed_page)
