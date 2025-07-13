@@ -2,6 +2,11 @@
 
 - Virtual Environment with Python < 3.13 is needed, to make tensorflow work
 - Always execute the main script from the root folder, aka `python3 src/main.py`!
+- Start WebApp with:
+
+```bash
+streamlit run src/app.py
+```
 
 ## Modules
 Modules are the building blocks of the pipeline. Each Module should execute (in theory) exactly one task.

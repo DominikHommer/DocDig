@@ -40,10 +40,10 @@ class DetectColumns(Module):
         pages = data["row-extractor"]
         output = []
 
-        for page_idx, page in enumerate(pages):
+        for _, page in enumerate(pages):
             processed_page = {"columns": []}
 
-            for col_idx, column_cells in enumerate(page["columns"]):
+            for _, column_cells in enumerate(page["columns"]):
                 is_batch = False
                 is_spezies = False
                 is_sexe = False
@@ -65,6 +65,7 @@ class DetectColumns(Module):
                         "is_alle_column": False,
                         "is_poids_column": False
                     })
+
                     continue
 
                 first_cell_img = column_cells[0]

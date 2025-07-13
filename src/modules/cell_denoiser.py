@@ -77,7 +77,12 @@ class CellDenoiser(Module):
                     "cells": denoised_cells,
                     "is_batch_column": col.get("is_batch_column", False),
                     "is_species_column": col.get("is_species_column", False),
-                    "is_age_column": col.get("is_age_column", False)
+                    "is_sexe_column": col.get("is_sexe_column", False),
+                    "is_age_column": col.get("is_age_column", False),
+                    "is_jour-mois_column": col.get("is_jour-mois_column", False),
+                    "is_heure_column": col.get("is_heure_column", False),
+                    "is_alle_column": col.get("is_alle_column", False),
+                    "is_poids_column": col.get("is_poids_column", False)
                 })
 
             result.append(page_data)

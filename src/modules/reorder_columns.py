@@ -40,6 +40,7 @@ class ReorderColumns(Module):
             columns = page["columns"]
             role_to_index = {}
 
+
             # Map detected roles to their current column index
             for i, col in enumerate(columns):
                 role = self._get_column_role(col)
@@ -111,8 +112,9 @@ class ReorderColumns(Module):
             reordered = []
             for expected_role in self.expected_roles:
                 idx = role_to_index.get(expected_role)
-                print(f"Updated Column: {expected_role}, at idx: {idx}")
-                reordered.append(columns[idx])
+                if idx is not None:
+                    print(f"Updated Column: {expected_role}, at idx: {idx}")
+                    reordered.append(columns[idx])
 
             output.append({"columns": reordered})
 

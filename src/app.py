@@ -2,6 +2,8 @@ import os
 os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
 import streamlit as st
 from PIL import Image
+from functools import partial
+
 import random
 import base64
 
@@ -20,8 +22,6 @@ from modules.trocr import TrOCR
 from modules.fuzzy_matching import FuzzyMatchingBirdNames
 from modules.fuzzy_matching import FuzzyMatchingAge
 from modules.predictor_dummy import PredictorDummy
-
-
 
 def get_base64_image(path):
     with open(path, "rb") as img_file:
@@ -115,7 +115,7 @@ elif st.session_state.processing[idx]:
     page_pipeline.add_stage(RowExtractor(debug=False))
     page_pipeline.add_stage(DetectColumns())
     page_pipeline.add_stage(ReorderColumns())
-    page_pipeline.add_stage(CellDenoiser(debug=True))
+    page_pipeline.add_stage(CellDenoiser(debug=False))
 
     page_pipeline.add_stage(CellFormatter())
     page_pipeline.add_stage(QuotationMarkDetector())
@@ -125,8 +125,6 @@ elif st.session_state.processing[idx]:
 
     result = page_pipeline.run()
     #print(f"ResultsLen: {len(result)}\nResultsLen result['columns'] {len(result['columns'])}")
-    
-
 
     st.session_state.predictions[idx] = result
     st.session_state.processing[idx] = False
@@ -147,27 +145,10 @@ else:
 
     # ---- HEADER (row 0) ----
     header_row = rows[0]
-    header_cols = st.columns(len(header_row))
-    for col_idx, cell in enumerate(header_row):
-        with header_cols[col_idx]:
-            img_array = cell["image"]
-            if img_array is None:
-                st.markdown('<span style="color:red">Cell Not Detected</span>', unsafe_allow_html=True)
-            else:
-                img_uint8 = (
-                    (img_array * 255).astype("uint8")
-                    if img_array.max() <= 1
-                    else img_array.astype("uint8")
-                )
-                st.image(Image.fromarray(img_uint8), use_container_width=True)
-
-    # ---- OTHER ROWS (starting from row 1) ----
-    for row_idx, row in enumerate(rows[1:], start=1):
-
-        # Display Images
-        image_cols = st.columns(len(row))
-        for col_idx, cell in enumerate(row):
-            with image_cols[col_idx]:
+    with st.container(border=True):
+        header_cols = st.columns(len(header_row), vertical_alignment="center")
+        for col_idx, cell in enumerate(header_row):
+            with header_cols[col_idx]:
                 img_array = cell["image"]
                 if img_array is None:
                     st.markdown('<span style="color:red">Cell Not Detected</span>', unsafe_allow_html=True)
@@ -179,47 +160,128 @@ else:
                     )
                     st.image(Image.fromarray(img_uint8), use_container_width=True)
 
-        erkannt_cols = st.columns(len(row))
+    # ---- OTHER ROWS (starting from row 1) ----
+    for row_idx, row in enumerate(rows[1:], start=1):
+        with st.container(border=True):
 
-        # Display recognized text
-        for col_idx, cell in enumerate(row):
-            with erkannt_cols[col_idx]:
-                erkannt_text = cell.get("erkannt", "")
-                score = cell.get("score", -1)
+            # Display Images
+            image_cols = st.columns(len(row), vertical_alignment="center")
+            for col_idx, cell in enumerate(row):
+                with image_cols[col_idx]:
+                    img_array = cell["image"]
+                    if img_array is None:
+                        st.markdown('<span style="color:red">Cell Not Detected</span>', unsafe_allow_html=True)
+                    else:
+                        img_uint8 = (
+                            (img_array * 255).astype("uint8")
+                            if img_array.max() <= 1
+                            else img_array.astype("uint8")
+                        )
+                        st.image(Image.fromarray(img_uint8), use_container_width=True)
 
-                if score >= 90:
-                    color = "#d4edda"  # green
-                elif score >= 50:
-                    color = "#fff3cd"  # yellow
-                else:
-                    color = "#f8d7da"  # red
+            #erkannt_cols = st.columns(len(row))
 
-                st.markdown(
-                    f"""
-                    <div style='background-color:{color}; color: black; padding:6px; border-radius:6px; text-align:center;'>
-                        <b>Erkannt:</b> {erkannt_text}
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+            # Display recognized text
+            ##for col_idx, cell in enumerate(row):
+            ##    with erkannt_cols[col_idx]:
+            ##        erkannt_text = cell.get("erkannt", "")
+            ##        score = cell.get("score", -1)
+    ##
+            ##        if score >= 90:
+            ##            color = "#d4edda"  # green
+            ##        elif score >= 50:
+            ##            color = "#fff3cd"  # yellow
+            ##        else:
+            ##            color = "#f8d7da"  # red
+    ##
+            ##        st.markdown(
+            ##            f"""
+            ##            <div style='background-color:{color}; color: black; padding:6px; border-radius:6px; text-align:center;'>
+            ##                <b>Erkannt:</b> {erkannt_text}
+            ##            </div>
+            ##            """,
+            ##            unsafe_allow_html=True,
+            ##        )
 
-        # Input field for correction
-        input_cols = st.columns(len(row))
-        for col_idx, _ in enumerate(row):
-            with input_cols[col_idx]:
-                cell_key = f"verbesserung-{idx}-{row_idx}-{col_idx}"
-                st.text_input(
-                    "Verbesserung:",
-                    key=cell_key,
-                    label_visibility="collapsed",
-                    placeholder="Edit",
-                )
+            # Input field for correction
+            input_cols = st.columns(len(row), vertical_alignment="center")
+            for col_idx, cell in enumerate(row):
+                with input_cols[col_idx]:
+                    erkannt_text = cell.get("erkannt", None)
 
-    print(f"\nDone printing!\n")
+                    cell_key = f"verbesserung-{idx}-{row_idx}-{col_idx}"
+
+                    def on_change(_cell_key, _idx, _col_idx, _row_idx):
+                        st.session_state.predictions[_idx][0]["columns"][_col_idx]["cells"][_row_idx]["erkannt"] = st.session_state[_cell_key]
+                        st.rerun()
+
+                    st.text_input(
+                        "Verbesserung:",
+                        key=cell_key,
+                        value=erkannt_text,
+                        label_visibility="collapsed",
+                        placeholder="Enter",
+                        on_change=partial(on_change, cell_key, idx, col_idx, row_idx),
+                    )
 
     if st.session_state.page_idx + 1 < len(all_pages):
         if st.button("➡️ Nächste Seite"):
             st.session_state.page_idx += 1
             st.rerun()
     else:
-        st.success("Alle Seiten verarbeitet 🎉")
+        if st.button("Finalisieren und Download"):
+            # FIXME: Move to dedicated module...
+            import csv
+
+            output_dir = os.path.join("data", "output")
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, "predictions.csv")
+
+            with open(output_path, "w", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+
+                for idx in range(len(st.session_state.predictions)):
+                    page_data = st.session_state.predictions[idx][0]["columns"]
+                    num_rows = len(page_data[0]["cells"])
+
+                    if idx == 0:
+                        row = []
+                        for col in page_data:
+                            if col["is_batch_column"]:
+                                row.append("Batch")
+                            elif col["is_species_column"]:
+                                row.append("Species")
+                            elif col["is_sexe_column"]:
+                                row.append("Sexe")
+                            elif col["is_age_column"]:
+                                row.append("Age")
+                            elif col["is_jour-mois_column"]:
+                                row.append("Jour-Mois")
+                            elif col["is_heure_column"]:
+                                row.append("Heure")
+                            elif col["is_alle_column"]:
+                                row.append("Alle")
+                            elif col["is_poids_column"]:
+                                row.append("Poids")
+                            else:
+                                row.append("Unknown")
+
+                        writer.writerow(row)
+                        writer.writerow([])
+
+                    
+                    writer.writerow([f"Page {idx + 1}"])
+
+                    for row_idx in range(1, num_rows):
+                        row = [
+                            page_data[col_idx]["cells"][row_idx]["erkannt"]
+                            for col_idx in range(len(page_data))
+                        ]
+                        writer.writerow(row)
+
+                    writer.writerow([])
+
+            st.markdown(
+                f'<a href="data:file/csv;base64,{base64.b64encode(open(output_path, "rb").read()).decode()}" download="predictions.csv">Download Predictions</a>',
+                unsafe_allow_html=True,
+            )

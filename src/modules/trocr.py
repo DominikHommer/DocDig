@@ -9,8 +9,14 @@ import pandas as pd
 import cv2
 
 class TrOCR(Module):
-    def __init__(self, model_name="microsoft/trocr-base-stage1", output_path="data/output/trocr_output.xlsx"):
+    def __init__(self, model_name="microsoft/trocr-base-stage1", output_path="data/output/trocr_output.xlsx", debug=False, debug_folder="debug/debug_cell_denoiser/"):
         super().__init__("trocr")
+
+        self.debug = debug
+        self.debug_folder = debug_folder
+        if self.debug:
+            os.makedirs(self.debug_folder, exist_ok=True)
+            
         self.processor = TrOCRProcessor.from_pretrained(model_name)
         self.model = VisionEncoderDecoderModel.from_pretrained(model_name)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -41,7 +47,9 @@ class TrOCR(Module):
 
                 # Speichere Beispielbild für Debug-Zwecke
                 if cells and isinstance(cells[0], dict) and "image" in cells[0] and cells[0]["image"] is not None:
-                    cv2.imwrite(f"test_png_{col_idx}.png", cells[0]["image"])
+                    if self.debug:
+                        debug_path = os.path.join(self.debug_folder, f"test_png_{col_idx}.png")
+                        cv2.imwrite(debug_path, cells[0]["image"])
 
                 if not (col_idx == 1 or col_idx == 3 or col_idx == 4 or col_idx == 5):
                     print(f"Skipping OCR for column {col_idx}.")
