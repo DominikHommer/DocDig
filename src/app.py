@@ -39,6 +39,15 @@ st.markdown(
         padding-top: 6px;
         padding-bottom: 6px;
     }
+    [data-testid="stColumn"]:has(div.custom-marker):not(:last-child) { 
+        padding: 0px 10px;
+        border-right: 1px solid #e0e0e0;
+    }
+
+    .stPopover {
+        margin-top: 10px;
+        padding: 0 4px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -63,24 +72,50 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-uploaded = st.file_uploader(label="File upload", type="pdf", label_visibility="hidden")
-if not uploaded:
-    st.stop()
+def _reset_session_state():
+    if "all_pages" in st.session_state:
+        del st.session_state["all_pages"]
 
-input_dir = os.path.join("data", "input")
-os.makedirs(input_dir, exist_ok=True)
-pdf_path = os.path.join(input_dir, uploaded.name)
-with open(pdf_path, "wb") as f:
-    f.write(uploaded.getbuffer())
+    if "page_idx" in st.session_state:
+        del st.session_state["page_idx"]
 
+    if "predictions" in st.session_state:
+        del st.session_state["predictions"]
+    
+    if "processing" in st.session_state:
+        del st.session_state["processing"]
 
-if "all_pages" not in st.session_state:
-    base_pipeline = CVPipeline(input_data={})
-    base_pipeline.add_stage(PdfConverter(debug=False))
-    st.session_state.all_pages = base_pipeline.run(input_data=pdf_path)
-    st.session_state.predictions = [None] * len(st.session_state.all_pages)
-    st.session_state.page_idx = 0
-    st.session_state.processing = [False] * len(st.session_state.all_pages)
+    if "uploaded_name" in st.session_state:
+        del st.session_state["uploaded_name"]
+
+if 'uploaded' not in st.session_state:
+    st.session_state['uploaded'] = False
+
+if not st.session_state.uploaded:
+    uploaded = st.file_uploader(label="File upload", type="pdf", label_visibility="hidden")
+
+    if not uploaded:
+        st.stop()
+    
+    input_dir = os.path.join("data", "input")
+    os.makedirs(input_dir, exist_ok=True)
+    pdf_path = os.path.join(input_dir, uploaded.name)
+    with open(pdf_path, "wb") as f:
+        f.write(uploaded.getbuffer())
+
+    _reset_session_state()
+    if "all_pages" not in st.session_state:
+        base_pipeline = CVPipeline(input_data={})
+        base_pipeline.add_stage(PdfConverter(debug=False))
+        
+        st.session_state.all_pages = base_pipeline.run(input_data=pdf_path)
+        st.session_state.predictions = [None] * len(st.session_state.all_pages)
+        st.session_state.page_idx = 0
+        st.session_state.processing = [False] * len(st.session_state.all_pages)
+        st.session_state.uploaded_name = uploaded.name
+    
+    st.session_state.uploaded = True
+    st.rerun()
 
 idx = st.session_state.page_idx
 all_pages = st.session_state.all_pages
@@ -146,9 +181,11 @@ else:
     # ---- HEADER (row 0) ----
     header_row = rows[0]
     with st.container(border=True):
-        header_cols = st.columns(len(header_row), vertical_alignment="center")
+        header_cols = st.columns(len(header_row), vertical_alignment="center", gap=None)
         for col_idx, cell in enumerate(header_row):
             with header_cols[col_idx]:
+                st.markdown('<div class="custom-marker"></div>', unsafe_allow_html=True)
+
                 img_array = cell["image"]
                 if img_array is None:
                     st.markdown('<span style="color:red">Cell Not Detected</span>', unsafe_allow_html=True)
@@ -165,9 +202,11 @@ else:
         with st.container(border=True):
 
             # Display Images
-            image_cols = st.columns(len(row), vertical_alignment="center")
+            image_cols = st.columns(len(row), vertical_alignment="center", gap=None)
             for col_idx, cell in enumerate(row):
                 with image_cols[col_idx]:
+                    st.markdown('<div class="custom-marker"></div>', unsafe_allow_html=True)
+
                     img_array = cell["image"]
                     if img_array is None:
                         st.markdown('<span style="color:red">Cell Not Detected</span>', unsafe_allow_html=True)
@@ -204,25 +243,49 @@ else:
             ##        )
 
             # Input field for correction
-            input_cols = st.columns(len(row), vertical_alignment="center")
+            input_cols = st.columns(len(row), vertical_alignment="center", gap=None)
             for col_idx, cell in enumerate(row):
                 with input_cols[col_idx]:
                     erkannt_text = cell.get("erkannt", None)
 
-                    cell_key = f"verbesserung-{idx}-{row_idx}-{col_idx}"
-
-                    def on_change(_cell_key, _idx, _col_idx, _row_idx):
-                        st.session_state.predictions[_idx][0]["columns"][_col_idx]["cells"][_row_idx]["erkannt"] = st.session_state[_cell_key]
-                        st.rerun()
-
-                    st.text_input(
-                        "Verbesserung:",
-                        key=cell_key,
-                        value=erkannt_text,
-                        label_visibility="collapsed",
-                        placeholder="Enter",
-                        on_change=partial(on_change, cell_key, idx, col_idx, row_idx),
+                    st.markdown(
+                        f"""
+                        <div style='text-align:center; font-size:12px; font-weight: bold; padding: 0px 8px; border-right: 1px solid #e0e0e0;'>
+                            {erkannt_text if erkannt_text else ' - '}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
                     )
+
+                    with st.popover("", icon=":material/edit:", use_container_width=True):
+                        cell_key = f"cell-{idx}-{row_idx}-{col_idx}"
+                        
+                        def on_change(_cell_key, _idx, _col_idx, _row_idx):
+                            st.session_state.predictions[_idx][0]["columns"][_col_idx]["cells"][_row_idx]["erkannt"] = st.session_state[_cell_key]
+                            #st.rerun()
+
+                        st.text_input(
+                            "Verbesserung:",
+                            key=cell_key,
+                            value=erkannt_text,
+                            label_visibility="collapsed",
+                            placeholder="Enter",
+                            on_change=partial(on_change, cell_key, idx, col_idx, row_idx),
+                        )
+                    #cell_key = f"verbesserung-{idx}-{row_idx}-{col_idx}"
+#
+                    #def on_change(_cell_key, _idx, _col_idx, _row_idx):
+                    #    st.session_state.predictions[_idx][0]["columns"][_col_idx]["cells"][_row_idx]["erkannt"] = st.session_state[_cell_key]
+                    #    st.rerun()
+#
+                    #st.text_input(
+                    #    "Verbesserung:",
+                    #    key=cell_key,
+                    #    value=erkannt_text,
+                    #    label_visibility="collapsed",
+                    #    placeholder="Enter",
+                    #    on_change=partial(on_change, cell_key, idx, col_idx, row_idx),
+                    #)
 
     if st.session_state.page_idx + 1 < len(all_pages):
         if st.button("➡️ Nächste Seite"):
@@ -235,7 +298,7 @@ else:
 
             output_dir = os.path.join("data", "output")
             os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, "predictions.csv")
+            output_path = os.path.join(output_dir, f"{st.session_state.uploaded_name}_predictions.csv")
 
             with open(output_path, "w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
@@ -282,6 +345,12 @@ else:
                     writer.writerow([])
 
             st.markdown(
-                f'<a href="data:file/csv;base64,{base64.b64encode(open(output_path, "rb").read()).decode()}" download="predictions.csv">Download Predictions</a>',
+                f'<a href="data:file/csv;base64,{base64.b64encode(open(output_path, "rb").read()).decode()}" download="{st.session_state.uploaded_name}_predictions.csv">Download Predictions</a>',
                 unsafe_allow_html=True,
             )
+        
+        if st.button("Zurücksetzen", type="primary"):
+            _reset_session_state()
+            st.session_state.uploaded = False
+            
+            st.rerun()
